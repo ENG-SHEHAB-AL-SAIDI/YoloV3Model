@@ -167,14 +167,24 @@ class ScalePred(nn.Module):
             .permute(0,1,3,4,2)
         )
 
+
+
+
+
+
+
+
+
+
+###################### testing ###############
 # Dummy input
-dummy_input = torch.randn((2, 3, 416, 416))  # Batch size 2, 3 channels, 416x416 image
-
-# Forward pass
-model = YOLOv3(numClasses=1, numAnchors=3)
-outputs = model(dummy_input)
-
-# Print output shapes
-for i, out in enumerate(outputs):
-    print(f"Output {i+1} shape: {out.shape}")
-
+# dummy_input = torch.randn((2, 3, 416, 416))  # Batch size 2, 3 channels, 416x416 image
+#
+# # Forward pass
+# model = YOLOv3(numClasses=1, numAnchors=3)
+# outputs = model(dummy_input)
+#
+# # Print output shapes
+# for i, out in enumerate(outputs):
+#     print(f"Output {i+1} shape: {out.shape}")
+#

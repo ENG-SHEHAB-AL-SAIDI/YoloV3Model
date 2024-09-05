@@ -1,64 +1,72 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from Utils import intersection_over_union
 
 
-class YOLOLoss(nn.Module):
-    def __init__(self, numAnchors, numClasses, gridSize, ignoreThreshold=0.5):
-        super(YOLOLoss, self).__init__()
-        self.numAnchors = numAnchors
-        self.numClasses = numClasses
-        self.gridSize = gridSize
-        self.ignoreThreshold = ignoreThreshold
+class YoloLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.entropy = nn.CrossEntropyLoss()
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, preds, targets):
-        totalLoss = 0
-        batchSize = preds[0].size(0)
+        # Constants signifying how much to pay for each respective part of the loss
+        self.lambdaClass = 1
+        self.lambdaNoObj = 10
+        self.lambdaObj = 1
+        self.lambdaBox = 10
 
-        for pred in preds:
-            # Reshape the prediction to separate anchor boxes
-            pred = pred.view(batchSize, self.numAnchors, -1, self.gridSize,
-                             self.gridSize)  # B, A, (5 + num_classes), H, W
+    def forward(self, predictions, target, anchors):
+        # Check where obj and noObj (we ignore if target == -1)
+        obj = target[..., 0] == 1  # in paper this is iObj_i
+        noObj = target[..., 0] == 0  # in paper this is iNoObj_i
 
-            # Extract bounding box predictions
-            bbox_pred = pred[:, :, :4, :, :]  # Bounding boxes: [center_x, center_y, width, height]
-            obj_pred = pred[:, :, 4:5, :, :]  # Objectness score
-            class_pred = pred[:, :, 5:, :, :]  # Class probabilities
+        # ======================= #
+        #   FOR NO OBJECT LOSS    #
+        # ======================= #
 
-            # Initialize targets
-            bbox_targets = torch.zeros_like(bbox_pred)
-            obj_targets = torch.zeros_like(obj_pred)
-            class_targets = torch.zeros(batchSize, self.numAnchors, self.gridSize, self.gridSize, dtype=torch.long,
-                                        device=pred.device)
+        noObjectLoss = self.bce(
+            (predictions[..., 0:1][noObj]), (target[..., 0:1][noObj]),
+        )
 
-            # Assign targets to corresponding grid cells
-            for b in range(batchSize):
-                for t in range(len(targets[b][0])):
-                    if len(targets[b][0].shape) == 2:  # Check if targets[b][0] is 2D
-                        gx, gy = targets[b][0][t, :2] * self.gridSize  # Ground truth center in grid space
-                        gw, gh = targets[b][0][t, 2:]  # Width and height (already normalized)
-                        gi, gj = int(gx), int(gy)  # Grid cell indices
+        # ==================== #
+        #   FOR OBJECT LOSS    #
+        # ==================== #
 
-                        # Set the target box for the responsible anchor
-                        bbox_targets[b, :, 0, gj, gi] = gx - gi  # x offset within the cell
-                        bbox_targets[b, :, 1, gj, gi] = gy - gj  # y offset within the cell
-                        bbox_targets[b, :, 2, gj, gi] = gw  # width
-                        bbox_targets[b, :, 3, gj, gi] = gh  # height
+        anchors = anchors.reshape(1, 3, 1, 1, 2)
+        boxPreds = torch.cat([self.sigmoid(predictions[..., 1:3]), torch.exp(predictions[..., 3:5]) * anchors], dim=-1)
+        ious = intersection_over_union(boxPreds[obj], target[..., 1:5][obj]).detach()
+        objectLoss = self.mse(self.sigmoid(predictions[..., 0:1][obj]), ious * target[..., 0:1][obj])
 
-                        # Set objectness target
-                        obj_targets[b, :, 0, gj, gi] = 1  # Positive objectness for this anchor
+        # ======================== #
+        #   FOR BOX COORDINATES    #
+        # ======================== #
 
-                        # Set class target
-                        class_targets[b, :, gj, gi] = targets[b][2][t]
-                    else:
-                        raise ValueError(
-                            "Expected target tensor to have 2 dimensions, but got {}.".format(targets[b][0].shape))
+        predictions[..., 1:3] = self.sigmoid(predictions[..., 1:3])  # x,y coordinates
+        target[..., 3:5] = torch.log(
+            (1e-16 + target[..., 3:5] / anchors)
+        )  # width, height coordinates
+        boxLoss = self.mse(predictions[..., 1:5][obj], target[..., 1:5][obj])
 
-            # Compute losses
-            bbox_loss = F.mse_loss(bbox_pred, bbox_targets, reduction='sum')
-            obj_loss = F.binary_cross_entropy_with_logits(obj_pred, obj_targets, reduction='sum')
-            class_loss = F.cross_entropy(class_pred.view(-1, self.numClasses), class_targets.view(-1), reduction='sum')
+        # ================== #
+        #   FOR CLASS LOSS   #
+        # ================== #
 
-            totalLoss += bbox_loss + obj_loss + class_loss
+        classLoss = self.entropy(
+            (predictions[..., 5:][obj]), (target[..., 5][obj].long()),
+        )
 
-        return totalLoss / batchSize
+        #print("__________________________________")
+        #print(self.lambdaBox * boxLoss)
+        #print(self.lambdaObj * objectLoss)
+        #print(self.lambdaNoObj * noObjectLoss)
+        #print(self.lambdaClass * classLoss)
+        #print("\n")
+
+        return (
+                self.lambdaBox * boxLoss
+                + self.lambdaObj * objectLoss
+                + self.lambdaNoObj * noObjectLoss
+                + self.lambdaClass * classLoss
+        )
