@@ -1,11 +1,19 @@
-from torch.optim import Adam
+import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
 from DataSet import YoloDataset
+from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision
 from YoloLoss import YoloLoss
 from YoloModel import YOLOv3
+from tqdm import tqdm
+import warnings
+
+warnings.filterwarnings("ignore")
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main():
@@ -63,70 +71,120 @@ def main():
     #                            Loading Data                                 #
     ###########################################################################
     numWorkers = 4
-    batchSize = 4
+    batchSize = 32
     dropLast = False
     pinMemory = True
-    train_dataset = YoloDataset(
-        'DataSet/train',
-        'DataSet/train',
-        anchors=[
-            [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
-            [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
-            [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ],
-        transform=train_transforms,
-    )
-    train_loader = DataLoader(train_dataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
-                              drop_last=dropLast, pin_memory=pinMemory)
 
-    test_dataset = YoloDataset(
-        'DataSet/test',
-        'DataSet/test',
-        s=[imageSize // 32, imageSize // 16, imageSize // 8],
+    trainDataset = YoloDataset(
+        'DataSet/train',
+        'DataSet/train',
         anchors=[
             [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
             [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
             [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ],
         transform=test_transforms,
     )
-    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+    trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
                              drop_last=dropLast, pin_memory=pinMemory)
+
+    # testDataset = YoloDataset(
+    #     'DataSet/test',
+    #     'DataSet/test',
+    #     s=[imageSize // 32, imageSize // 16, imageSize // 8],
+    #     anchors=[
+    #         [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
+    #         [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+    #         [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ],
+    #     transform=test_transforms,
+    # )
+    # testLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+    #                          drop_last=dropLast, pin_memory=pinMemory)
 
     ###########################################################################
     #                            Model Setup                                  #
     ###########################################################################
 
     # Initialize model, loss function, and optimizer
-    model = YOLOv3(numClasses=1, numAnchors=3)
-    criterion = YoloLoss()
-    optimizer = Adam(model.parameters(), lr=1e-4)
+    lr = 1e-5,
+    model = YOLOv3(numClasses=1, numAnchors=3).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-4)
+    lossFunc = YoloLoss()
+    scaler = torch.cuda.amp.GradScaler()
+    # loadModelState("ModelStatus/modelState.pth.tar",
+    #                model=model, optimizer=optimizer, lr=lr, device=device)
 
     ###########################################################################
     #                            Model training                               #
     ###########################################################################
     # Training loop
-    numEpochs = 1
+    scaledAnchors = (
+            torch.tensor([
+                [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
+                [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+                [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ])
+            * torch.tensor([imageSize // 32, imageSize // 16, imageSize // 8])
+            .unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+    ).to(device)
+    numEpochs = 10
     for epoch in range(numEpochs):
         model.train()
-        runningLoss = 0.0
-        for images, targets in train_loader:
+        loop = tqdm(trainLoader, total=len(trainLoader), leave=True)
+        losses = []
+        for batch_idx, (x, y) in enumerate(loop):
+            x = x.to(device)
+            y0, y1, y2 = (y[0].to(device), y[1].to(device), y[2].to(device),)
+            with torch.cuda.amp.autocast():
+                out = model(x)
+                loss = (
+                        lossFunc(out[0], y0, scaledAnchors[0])
+                        + lossFunc(out[1], y1, scaledAnchors[1])
+                        + lossFunc(out[2], y2, scaledAnchors[2])
+                )
+            losses.append(loss.item())
             optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, targets)
-            # loss.backward()
-            # optimizer.step()
-            runningLoss += loss.item()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
-        print(f'Epoch {epoch+1}/{numEpochs}, Loss: {runningLoss/len(train_loader)}')
+            # update progress bar
+            mean_loss = sum(losses) / len(losses)
+            loop.set_postfix(loss=mean_loss)
 
-    # # Test model
-    # model.eval()
-    # with torch.no_grad():
-    #     for images, targets in test_loader:
-    #         outputs = model(images)
-    #         # Post-processing would be done here, such as applying NMS
-    #         # Example: print output shapes
-    #         for out in outputs:
-    #             print(out.shape)
+        # if epoch > 0 and epoch % 3 == 0:
+        #     check_class_accuracy(model, trainLoader, threshold=0.05)
+        #     pred_boxes, true_boxes = get_evaluation_bboxes(
+        #         trainLoader,
+        #         model,
+        #         iou_threshold=0.45,
+        #         anchors=[
+        #             [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
+        #             [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+        #             [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
+        #         ],
+        #         threshold=0.05,
+        #     )
+        #     mapval = mean_average_precision(
+        #         pred_boxes,
+        #         true_boxes,
+        #         iou_threshold=0.5,
+        #         box_format="midpoint",
+        #         num_classes=1,
+        #     )
+        #     print(f"MAP: {mapval.item()}")
+        #     model.train()
+
+
+
+
+# # Test model
+# model.eval()
+# with torch.no_grad():
+#     for images, targets in test_loader:
+#         outputs = model(images)
+#         # Post-processing would be done here, such as applying NMS
+#         # Example: print output shapes
+#         for out in outputs:
+#             print(out.shape)
 
 
 if __name__ == "__main__":

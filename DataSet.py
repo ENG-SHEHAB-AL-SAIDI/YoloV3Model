@@ -70,6 +70,7 @@ class YoloDataset(Dataset):
             iouAnchors = iou_width_height(torch.tensor(box[2:4]), self.anchors)
             anchorIndices = iouAnchors.argsort(descending=True, dim=0)
             x, y, width, height, class_label = box
+
             has_anchor = [False] * 3  # each scale should have one anchor
             for anchor_idx in anchorIndices:
                 scale_idx = anchor_idx // self.numAnchorsPerScale

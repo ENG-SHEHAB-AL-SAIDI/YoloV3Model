@@ -6,6 +6,8 @@ import os
 import random
 import torch
 from collections import Counter
+
+from numpy.f2py.auxfuncs import throw_error
 from tqdm import tqdm
 
 
@@ -419,25 +421,32 @@ def get_mean_std(loader):
     return mean, std
 
 
-def save_checkpoint(model, optimizer, filename="my_checkpoint.pth.tar"):
-    print("=> Saving checkpoint")
-    checkpoint = {
+def saveModelState(model, optimizer, filePath="my_checkpoint.pth.tar"):
+    if filePath == "": return
+    os.makedirs(os.path.dirname(filePath), exist_ok=True)
+    print("=> Saving Model")
+    state = {
         "state_dict": model.state_dict(),
         "optimizer": optimizer.state_dict(),
     }
-    torch.save(checkpoint, filename)
+    torch.save(state, filePath)
+    print("saving model state successful")
 
 
-def load_checkpoint(checkpoint_file, model, optimizer, lr):
-    print("=> Loading checkpoint")
-    checkpoint = torch.load(checkpoint_file, map_location=config.DEVICE)
-    model.load_state_dict(checkpoint["state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
+def loadModelState(modelStateFilePath, model, optimizer, lr, device):
+    if not os.path.exists(modelStateFilePath):
+        print(f"{modelStateFilePath} doesn't exist")
+        return
+    elif modelStateFilePath == "": return
 
-    # If we don't do this then it will just have learning rate of old checkpoint
-    # and it will lead to many hours of debugging \:
+    print("=> Loading state")
+    state = torch.load(modelStateFilePath, map_location=device)
+    model.load_state_dict(state["state_dict"])
+    optimizer.load_state_dict(state["optimizer"])
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
+
+    print("Loading model state successful")
 
 
 
