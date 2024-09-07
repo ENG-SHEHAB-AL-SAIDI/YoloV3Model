@@ -52,17 +52,17 @@ class YoloLoss(nn.Module):
         # ================== #
         #   FOR CLASS LOSS   #
         # ================== #
-        print(target.shape)
+
         classLoss = self.entropy(
-            (predictions[..., 5:][obj]), (target[..., 5][obj].long()),
+            (predictions[..., 5:][obj]), (target[...,5:][obj]),
         )
 
-        print("__________________________________")
-        print(self.lambdaBox * boxLoss)
-        print(self.lambdaObj * objectLoss)
-        print(self.lambdaNoObj * noObjectLoss)
-        print(self.lambdaClass * classLoss)
-        print("\n")
+        # print("__________________________________")
+        # print(self.lambdaBox * boxLoss)
+        # print(self.lambdaObj * objectLoss)
+        # print(self.lambdaNoObj * noObjectLoss)
+        # print(self.lambdaClass * classLoss)
+        # print("\n")
 
         return (
                 self.lambdaBox * boxLoss
