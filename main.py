@@ -4,12 +4,17 @@ from torch.utils.data import DataLoader
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
+from yaml import warnings
+
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision
 from YoloLoss import YoloLoss
 from YoloModel import YOLOv3
 from tqdm import tqdm
-from colorama import Fore, Style, init
+from colorama import Fore
+import warnings
+warnings.filterwarnings("ignore")
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -125,7 +130,7 @@ def main():
 ###########################################################################
 #                            Model training                               #
 ###########################################################################
-    numEpochs = 4
+    numEpochs = 1
     for epoch in range(numEpochs):
         model.train()
         loop = tqdm(trainLoader, leave=True, desc=Fore.LIGHTWHITE_EX+f'Epoch {epoch + 1}/{numEpochs}')
@@ -152,7 +157,7 @@ def main():
 
             losses.append(loss.item())
             optimizer.zero_grad()
-            if torch.cuda.is_available():
+            if device == "cuda":
                 scaler.scale(loss).backward()  # Use scaler only with CUDA
                 scaler.step(optimizer)
                 scaler.update()
@@ -164,18 +169,15 @@ def main():
             mean_loss = sum(losses) / len(losses)
             loop.set_postfix(loss=mean_loss)
 
-        if epoch > 0 and epoch % 3 == 0:
+        if epoch >= 0 and epoch % 3 == 0:
             check_class_accuracy(model, trainLoader, threshold=0.05, device=device)
             pred_boxes, true_boxes = get_evaluation_bboxes(
                 trainLoader,
                 model,
                 iou_threshold=0.45,
-                anchors=[
-                    [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
-                    [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
-                    [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
-                ],
+                anchors=anchors,
                 threshold=0.05,
+                device=device
             )
             mapval = mean_average_precision(
                 pred_boxes,
@@ -183,6 +185,7 @@ def main():
                 iou_threshold=0.5,
                 box_format="midpoint",
                 num_classes=1,
+
             )
             print(f"MAP: {mapval.item()}")
 

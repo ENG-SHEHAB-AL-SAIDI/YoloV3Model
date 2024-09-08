@@ -22,7 +22,7 @@ def iou_width_height(boxes1, boxes2):
         boxes1[..., 1], boxes2[..., 1]
     )
     union = (
-        boxes1[..., 0] * boxes1[..., 1] + boxes2[..., 0] * boxes2[..., 1] - intersection
+            boxes1[..., 0] * boxes1[..., 1] + boxes2[..., 0] * boxes2[..., 1] - intersection
     )
     return intersection / union
 
@@ -107,12 +107,12 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
             box
             for box in bboxes
             if box[0] != chosen_box[0]
-            or intersection_over_union(
+               or intersection_over_union(
                 torch.tensor(chosen_box[2:]),
                 torch.tensor(box[2:]),
                 box_format=box_format,
             )
-            < iou_threshold
+               < iou_threshold
         ]
 
         bboxes_after_nms.append(chosen_box)
@@ -120,9 +120,7 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
     return bboxes_after_nms
 
 
-def mean_average_precision(
-    pred_boxes, true_boxes, iou_threshold=0.5, box_format="midpoint", num_classes=20
-):
+def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format="midpoint", num_classes=20):
     """
     Video explanation of this function:
     https://youtu.be/FppOzcDvaDI
@@ -232,13 +230,13 @@ def mean_average_precision(
 
 
 def get_evaluation_bboxes(
-    loader,
-    model,
-    iou_threshold,
-    anchors,
-    threshold,
-    box_format="midpoint",
-    device="cuda",
+        loader,
+        model,
+        iou_threshold,
+        anchors,
+        threshold,
+        box_format="midpoint",
+        device="cuda",
 ):
     # make sure model is in eval before get bboxes
     model.eval()
@@ -250,22 +248,17 @@ def get_evaluation_bboxes(
 
         with torch.no_grad():
             predictions = model(x)
-
         batch_size = x.shape[0]
         bboxes = [[] for _ in range(batch_size)]
         for i in range(3):
             S = predictions[i].shape[2]
             anchor = torch.tensor([*anchors[i]]).to(device) * S
-            boxes_scale_i = cells_to_bboxes(
-                predictions[i], anchor, S=S, is_preds=True
-            )
+            boxes_scale_i = cells_to_bboxes(predictions[i], anchor, S=S, is_preds=True)
             for idx, (box) in enumerate(boxes_scale_i):
                 bboxes[idx] += box
 
         # we just want one bbox for each label, not one for each scale
-        true_bboxes = cells_to_bboxes(
-            labels[2], anchor, S=S, is_preds=False
-        )
+        true_bboxes = cells_to_bboxes(labels[2], anchor, S=S, is_preds=False)
 
         for idx in range(batch_size):
             nms_boxes = non_max_suppression(
@@ -274,7 +267,6 @@ def get_evaluation_bboxes(
                 threshold=threshold,
                 box_format=box_format,
             )
-
             for nms_box in nms_boxes:
                 all_pred_boxes.append([train_idx] + nms_box)
 
@@ -327,6 +319,7 @@ def cells_to_bboxes(predictions, anchors, S, is_preds=True):
     converted_bboxes = torch.cat((best_class, scores, x, y, w_h), dim=-1).reshape(BATCH_SIZE, num_anchors * S * S, 6)
     return converted_bboxes.tolist()
 
+
 def check_class_accuracy(model, loader, threshold, device):
     model.eval()
     tot_class_preds, correct_class = 0, 0
@@ -340,7 +333,7 @@ def check_class_accuracy(model, loader, threshold, device):
 
         for i in range(3):
             y[i] = y[i].to(device)
-            obj = y[i][..., 0] == 1 # in paper this is Iobj_i
+            obj = y[i][..., 0] == 1  # in paper this is Iobj_i
             noobj = y[i][..., 0] == 0  # in paper this is Iobj_i
 
             correct_class += torch.sum(
@@ -354,9 +347,9 @@ def check_class_accuracy(model, loader, threshold, device):
             correct_noobj += torch.sum(obj_preds[noobj] == y[i][..., 0][noobj])
             tot_noobj += torch.sum(noobj)
 
-    print(f"Class accuracy is: {(correct_class/(tot_class_preds+1e-16))*100:2f}%")
-    print(f"No obj accuracy is: {(correct_noobj/(tot_noobj+1e-16))*100:2f}%")
-    print(f"Obj accuracy is: {(correct_obj/(tot_obj+1e-16))*100:2f}%")
+    print(f"Class accuracy is: {(correct_class / (tot_class_preds + 1e-16)) * 100:2f}%")
+    print(f"No obj accuracy is: {(correct_noobj / (tot_noobj + 1e-16)) * 100:2f}%")
+    print(f"Obj accuracy is: {(correct_obj / (tot_obj + 1e-16)) * 100:2f}%")
     model.train()
 
 
@@ -391,7 +384,8 @@ def loadModelState(modelStateFilePath, model, optimizer, lr, device):
     if not os.path.exists(modelStateFilePath):
         print(f"{modelStateFilePath} doesn't exist")
         return
-    elif modelStateFilePath == "": return
+    elif modelStateFilePath == "":
+        return
 
     print("=> Loading state")
     state = torch.load(modelStateFilePath, map_location=device)
@@ -402,31 +396,6 @@ def loadModelState(modelStateFilePath, model, optimizer, lr, device):
 
     print("Loading model state successful")
 
-
-
-def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
-    model.eval()
-    x, y = next(iter(loader))
-    x = x.to("cuda")
-    with torch.no_grad():
-        out = model(x)
-        bboxes = [[] for _ in range(x.shape[0])]
-        for i in range(3):
-            batch_size, A, S, _, _ = out[i].shape
-            anchor = anchors[i]
-            boxes_scale_i = cells_to_bboxes(
-                out[i], anchor, S=S, is_preds=True
-            )
-            for idx, (box) in enumerate(boxes_scale_i):
-                bboxes[idx] += box
-
-        model.train()
-
-    for i in range(batch_size):
-        nms_boxes = non_max_suppression(
-            bboxes[i], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
-        )
-        plot_image(x[i].permute(1,2,0).detach().cpu(), nms_boxes)
 
 def seed_everything(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
