@@ -76,8 +76,8 @@ test_transforms = A.Compose(
 ###########################################################################
 #                            Loading Data                                 #
 ###########################################################################
-numWorkers = 2
-batchSize = 2
+numWorkers = 1
+batchSize = 4
 dropLast = False
 pinMemory = True
 
