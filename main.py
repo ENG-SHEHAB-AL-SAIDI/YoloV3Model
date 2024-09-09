@@ -13,8 +13,8 @@ from YoloModel import YOLOv3
 from tqdm import tqdm
 from colorama import Fore
 import warnings
-warnings.filterwarnings("ignore")
 
+warnings.filterwarnings("ignore")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -91,6 +91,7 @@ trainDataset = YoloDataset(
 trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
                          drop_last=dropLast, pin_memory=pinMemory)
 
+
 # testDataset = YoloDataset(
 #     'DataSet/test',
 #     'DataSet/test',
@@ -112,12 +113,11 @@ trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, bat
 #                        drop_last=dropLast, pin_memory=pinMemory)
 
 
-
 ###########################################################################
 #                            Model Setup                                  #
 ###########################################################################
 def main():
-# Initialize model, loss function, and optimizer
+    # Initialize model, loss function, and optimizer
     lr = 1e-5,
     model = YOLOv3(numClasses=1, numAnchors=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-4)
@@ -127,13 +127,13 @@ def main():
     # loadModelState("ModelStatus/modelState.pth.tar",
     #                model=model, optimizer=optimizer, lr=lr, device=device)
 
-###########################################################################
-#                            Model training                               #
-###########################################################################
+    ###########################################################################
+    #                            Model training                               #
+    ###########################################################################
     numEpochs = 1
     for epoch in range(numEpochs):
         model.train()
-        loop = tqdm(trainLoader, leave=True, desc=Fore.LIGHTWHITE_EX+f'Epoch {epoch + 1}/{numEpochs}')
+        loop = tqdm(trainLoader, leave=True, desc=Fore.LIGHTWHITE_EX + f'Epoch {epoch + 1}/{numEpochs}')
         losses = []
         for batch_idx, (x, y) in enumerate(loop):
             x = x.to(device)
@@ -143,9 +143,9 @@ def main():
                 with torch.amp.autocast("cuda"):
                     out = model(x)
                     loss = (
-                        lossFunc(out[0], y0, scaledAnchors[0])
-                        + lossFunc(out[1], y1, scaledAnchors[1])
-                        + lossFunc(out[2], y2, scaledAnchors[2])
+                            lossFunc(out[0], y0, scaledAnchors[0])
+                            + lossFunc(out[1], y1, scaledAnchors[1])
+                            + lossFunc(out[2], y2, scaledAnchors[2])
                     )
             else:
                 out = model(x)
@@ -169,25 +169,33 @@ def main():
             mean_loss = sum(losses) / len(losses)
             loop.set_postfix(loss=mean_loss)
 
-        if epoch >= 0 and epoch % 3 == 0:
-            check_class_accuracy(model, trainLoader, threshold=0.05, device=device)
-            pred_boxes, true_boxes = get_evaluation_bboxes(
-                trainLoader,
-                model,
-                iou_threshold=0.45,
-                anchors=anchors,
-                threshold=0.05,
-                device=device
-            )
-            mapval = mean_average_precision(
-                pred_boxes,
-                true_boxes,
-                iou_threshold=0.5,
-                box_format="midpoint",
-                num_classes=1,
+        # if epoch >= 0 and epoch % 3 == 0:
+        acc = check_class_accuracy(model, trainLoader, threshold=0.05, device=device)
 
-            )
-            print(f"MAP: {mapval.item()}")
+        print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
+        print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
+        print(f"Obj accuracy is: {acc[2]:2f}%")
+
+        pred_boxes, true_boxes = get_evaluation_bboxes(
+            trainLoader,
+            model,
+            iou_threshold=0.45,
+            anchors=anchors,
+            threshold=0.005,
+            device=device
+        )
+
+        print("cal map")
+        mapval = mean_average_precision(
+            pred_boxes,
+            true_boxes,
+            iou_threshold=0.5,
+            box_format="midpoint",
+            num_classes=1,
+
+        )
+        print(f"MAP: {mapval.item()}")
+
 
 # # Test model
 # model.eval()

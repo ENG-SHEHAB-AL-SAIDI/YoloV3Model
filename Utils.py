@@ -256,11 +256,11 @@ def get_evaluation_bboxes(
             boxes_scale_i = cells_to_bboxes(predictions[i], anchor, S=S, is_preds=True)
             for idx, (box) in enumerate(boxes_scale_i):
                 bboxes[idx] += box
-
         # we just want one bbox for each label, not one for each scale
         true_bboxes = cells_to_bboxes(labels[2], anchor, S=S, is_preds=False)
 
         for idx in range(batch_size):
+            print(len(bboxes[idx]))
             nms_boxes = non_max_suppression(
                 bboxes[idx],
                 iou_threshold=iou_threshold,
@@ -347,10 +347,16 @@ def check_class_accuracy(model, loader, threshold, device):
             correct_noobj += torch.sum(obj_preds[noobj] == y[i][..., 0][noobj])
             tot_noobj += torch.sum(noobj)
 
-    print(f"Class accuracy is: {(correct_class / (tot_class_preds + 1e-16)) * 100:2f}%")
-    print(f"No obj accuracy is: {(correct_noobj / (tot_noobj + 1e-16)) * 100:2f}%")
-    print(f"Obj accuracy is: {(correct_obj / (tot_obj + 1e-16)) * 100:2f}%")
+    print(f"correct_class is: {correct_class}")
+    print(f"tot_class_preds is: {tot_class_preds}")
+    print(f"No obj  is: {correct_noobj}")
+    print(f"tot_noobj  is: {tot_noobj}")
+    print(f"Obj  is: {correct_obj}")
+    print(f"tot_obj  is: {tot_obj}")
+
     model.train()
+    return [(correct_class / (tot_class_preds + 1e-16)) * 100, (correct_noobj / (tot_noobj + 1e-16)) * 100,
+            (correct_obj / (tot_obj + 1e-16)) * 100]
 
 
 def get_mean_std(loader):
