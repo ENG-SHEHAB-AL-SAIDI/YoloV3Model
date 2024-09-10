@@ -42,8 +42,8 @@ with zipfile.ZipFile(destination_path, 'r') as zip_ref:
 
 print(f"Zip file extracted to {extraction_dir}.")
 
-currentFolderName = 'dataset'
-newFolderName = 'DataSet'
+currentFolderName = extraction_dir+'/dataset'
+newFolderName = extraction_dir+'/DataSet'
 
 # Rename the folder
 os.rename(currentFolderName, newFolderName)
