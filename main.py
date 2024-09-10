@@ -102,15 +102,6 @@ trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, bat
 # testLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
 #                         drop_last=dropLast, pin_memory=pinMemory)
 
-# valDataset = YoloDataset(
-#     'DataSet/valid',
-#     'DataSet/valid',
-#     s=s,
-#     anchors=anchors,
-#     transform=test_transforms,
-# )
-# valLoader = DataLoader(valDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-#                        drop_last=dropLast, pin_memory=pinMemory)
 
 
 ###########################################################################
