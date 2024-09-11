@@ -334,7 +334,7 @@ def check_class_accuracy(model, loader, threshold, device):
         for i in range(3):
             y[i] = y[i].to(device)
             obj = y[i][..., 0] == 1  # in paper this is Iobj_i
-            noobj = y[i][..., 0] == 0  # in paper this is Iobj_i
+            noObj = y[i][..., 0] == 0  # in paper this is Iobj_i
 
             correct_class += torch.sum(
                 torch.argmax(out[i][..., 5:][obj], dim=-1) == y[i][..., 5][obj]
@@ -344,8 +344,8 @@ def check_class_accuracy(model, loader, threshold, device):
             obj_preds = torch.sigmoid(out[i][..., 0]) > threshold
             correct_obj += torch.sum(obj_preds[obj] == y[i][..., 0][obj])
             tot_obj += torch.sum(obj)
-            correct_noobj += torch.sum(obj_preds[noobj] == y[i][..., 0][noobj])
-            tot_noobj += torch.sum(noobj)
+            correct_noobj += torch.sum(obj_preds[noObj] == y[i][..., 0][noObj])
+            tot_noobj += torch.sum(noObj)
 
     print(f"correct_class is: {correct_class}")
     print(f"tot_class_preds is: {tot_class_preds}")

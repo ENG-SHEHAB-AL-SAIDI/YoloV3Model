@@ -1,50 +1,60 @@
 import os
-
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+from torch.utils.data import Dataset
 from PIL import Image, ImageFile
+from Utils import iou_width_height
+import xml.etree.ElementTree as eT
 
-from Utils import iou_width_height, cells_to_bboxes
-import xml.etree.ElementTree as ET
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-def load_annotations(annot_path):
+def loadAnnotations(annotPath, annotFormat =".txt"):
     boxes = []
-    tree = ET.parse(annot_path)
-    root = tree.getroot()
-    imWidth = int(root.find('size').find('width').text)
-    imHeight = int(root.find('size').find('height').text)
-    for objectElem in root.findall('object'):
-        className = objectElem.find('name').text  # Get the class name
-        classId = 0
-        bndbox = objectElem.find('bndbox')
+    if annotFormat == ".xml":
+        tree = eT.parse(annotPath)
+        root = tree.getroot()
+        imWidth = int(root.find('size').find('width').text)
+        imHeight = int(root.find('size').find('height').text)
+        for objectElem in root.findall('object'):
+            className = objectElem.find('name').text  # Get the class name
+            classId = 0 if className == 'LP' else -1
+            bndBox = objectElem.find('bndbox')
 
-        # Get bounding box coordinates
-        xmin = int(bndbox.find('xmin').text)/imWidth
-        ymin = int(bndbox.find('ymin').text)/imHeight
-        xmax = int(bndbox.find('xmax').text)/imWidth
-        ymax = int(bndbox.find('ymax').text)/imHeight
+            # Get bounding box coordinates
+            xmin = float(bndBox.find('xmin').text) / imWidth
+            ymin = float(bndBox.find('ymin').text) / imHeight
+            xmax = float(bndBox.find('xmax').text) / imWidth
+            ymax = float(bndBox.find('ymax').text) / imHeight
 
-        width = xmax - xmin
-        height = ymax - ymin
-        xCenter = xmin + width / 2
-        yCenter = ymin + height / 2
-
-        boxes.append([xCenter, yCenter, width, height, classId])
+            width = xmax - xmin
+            height = ymax - ymin
+            xCenter = xmin + width / 2
+            yCenter = ymin + height / 2
+            boxes.append([xCenter, yCenter, width, height, classId])
 
         # Use normalized bounding box coordinates
             # boxes.append([x_center, y_center, width, height, class_id])
 
-    return boxes
+    elif annotFormat == ".txt":
+        with open(annotPath) as f:
+            for line in f:
+                parts = line.strip().split()
+                class_id = int(parts[0])
+                x_center, y_center, width, height = map(float, parts[1:])
+
+                # Use normalized bounding box coordinates
+                boxes.append([x_center, y_center, width, height, class_id])
+
+    return np.array(boxes)
 
 
 class YoloDataset(Dataset):
     def __init__(self,
-                 images_dir,
-                 annotations_dir,
+                 imagesDir,
+                 annotationsDir,
                  anchors,
+                 annotationsFormat = '.txt',
                  c=1,
                  s=None,
                  transform=None):
@@ -53,10 +63,11 @@ class YoloDataset(Dataset):
             self.s = [13, 26, 52]
         else:
             self.s = s
-        self.images_dir = images_dir
-        self.annotations_dir = annotations_dir
+        self.images_dir = imagesDir
+        self.annotationsDir = annotationsDir
+        self.annotationsFormat = annotationsFormat
         self.transform = transform
-        self.image_files = [f for f in os.listdir(images_dir) if f.endswith('.jpg')]
+        self.imageFiles = [f for f in os.listdir(imagesDir) if f.endswith('.jpg')]
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.numAnchors = self.anchors.shape[0]
         self.numAnchorsPerScale = self.numAnchors // 3
@@ -64,23 +75,25 @@ class YoloDataset(Dataset):
         self.ignoreIoUThreshold = 0.5
 
     def __len__(self):
-        return len(self.image_files)
+        return len(self.imageFiles)
 
     def __getitem__(self, idx):
-        img_file = self.image_files[idx]
+        img_file = self.imageFiles[idx]
         img_path = os.path.join(self.images_dir, img_file)
-        annot_path = os.path.join(self.annotations_dir, img_file.replace('.jpg', '.xml'))
+        annot_path = os.path.join(self.annotationsDir, img_file.replace('.jpg',self.annotationsFormat))
 
         # Load image
         image = np.array(Image.open(img_path).convert('RGB'))
         # Load and normalize annotations (already normalized)
-        boxes = load_annotations(annot_path)
+        boxes = loadAnnotations(annot_path, annotFormat=self.annotationsFormat)
+
 
         # Apply transformations
         if self.transform:
             augmentations = self.transform(image=image, bboxes=boxes)
             image = augmentations["image"]
             boxes = augmentations["bboxes"]
+
 
         targets = [torch.zeros(self.numAnchors // self.numAnchorsPerScale, S, S, 6) for S in self.s]
         # Convert list of boxes to tensor
@@ -116,7 +129,7 @@ class YoloDataset(Dataset):
         return image, tuple(targets)
 
 
-
+#
 # def main():
 #     # Testing
 #     imageSize = 416
@@ -132,24 +145,77 @@ class YoloDataset(Dataset):
 #     dropLast = False
 #     pinMemory = True
 #
+#     train_transforms = A.Compose(
+#         [
+#             A.LongestMaxSize(max_size=int(imageSize * scale)),
+#             A.PadIfNeeded(
+#                 min_height=int(imageSize * scale),
+#                 min_width=int(imageSize * scale),
+#                 border_mode=cv2.BORDER_CONSTANT,
+#                 value=[0, 255, 0]
+#             ),
+#             A.RandomCrop(width=imageSize, height=imageSize),
+#             A.ColorJitter(brightness=0.6, contrast=0.6, saturation=0.6, hue=0.6, p=0.4),
+#             A.OneOf(
+#                 [
+#                     A.ShiftScaleRotate(
+#                         rotate_limit=20, p=0.5, border_mode=cv2.BORDER_CONSTANT
+#                     ),
+#                     A.Affine(shear=15, p=0.5, mode=cv2.BORDER_CONSTANT, ),
+#                 ],
+#                 p=1.0,
+#             ),
+#             A.HorizontalFlip(p=0.5),
+#             A.Blur(p=0.1),
+#             A.CLAHE(p=0.1),
+#             A.Posterize(p=0.1),
+#             A.ToGray(p=0.1),
+#             A.ChannelShuffle(p=0.05),
+#             A.Normalize(mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255, ),
+#             ToTensorV2(),
+#         ],
+#         bbox_params=A.BboxParams(format="yolo", min_visibility=0.4, label_fields=[], ),
+#     )
+#
+#
+#
+#
 #     trainDataset = YoloDataset(
 #         'DataSet/train',
 #         'DataSet/train',
+#         annotationsFormat='.xml',
 #         s=s,
 #         anchors=anchors,
 #         transform=None,
 #     )
 #     # trainLoader = DataLoader(trainDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
 #     #                          drop_last=dropLast, pin_memory=pinMemory)
-#     indices = list(range(len(trainDataset)))
-#     subData = SubsetRandomSampler(indices[:5])
-#     trainLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=subData)
+#     # indices = list(range(len(trainDataset)))
+#     # subData = SubsetRandomSampler(indices[:5])
+#     # trainLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=subData)
+#     #
+#     # anchor = torch.tensor([*anchors[2]]) * 52
+#     # for x, y in trainLoader:
 #
-#     anchor = torch.tensor([*anchors[2]]) * 52
-#     for x, y in trainLoader:
-#         bbox = cells_to_bboxes(y[2],anchor,52,is_preds= False)
-#         print(bbox)
-#         break
+#     # Load image
+#     image = np.array(Image.open("DataSet/test/0.jpg").convert('RGB'))
+#     # Load and normalize annotations (already normalized)
+#     boxes = load_annotations("DataSet/test/0.xml", format='xml')
+#     print(image.shape)
+#     print(boxes[:,:4])
+#     plt.figure()
+#     plt.imshow(image)
+#     plt.title('Sample RGB Image from NumPy Array')
+#     plt.show()
+#     aug = train_transforms(image=image, bboxes=boxes)
+#
+#     print(aug["image"].shape)
+#     plt.figure()
+#     plt.imshow(aug["image"])
+#     plt.title('Sample RGB Image from NumPy Array')
+#     plt.show()
+#     print("-----------------------------")
+#
 #
 #
 #     # bbox = cells_to_bboxes(trainDataset[1][0],anchor,13,is_preds= False)
