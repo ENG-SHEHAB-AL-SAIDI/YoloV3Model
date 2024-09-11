@@ -51,11 +51,16 @@ def loadAnnotations(annotPath, annotFormat =".txt"):
     return np.array(boxes)
 
 def saveAnnotations(outputPath,imageName,boxes,imageWidth,imageHeight,annotationsFormat = '.txt'):
+
     if annotationsFormat == '.txt':
         annotPath = os.path.join(outputPath, f"{imageName}.txt")
         with open(annotPath, 'w') as f:
             for box in boxes:
-                f.write(" ".join(map(str, box)) + "\n")
+                # Ensure each box is a list/tuple with class label first followed by bounding box coordinates
+                classLabel = box[0]  # Assuming the class is the first element in the box
+                bboxCoords = box[1:]  # The rest are the bounding box coordinates
+                # Write the class and the bounding box coordinates to the file
+                f.write(f"{classLabel} " + " ".join(map(str, bboxCoords)) + "\n")
 
     elif annotationsFormat == '.xml':
         annotation = eT.Element("annotation")

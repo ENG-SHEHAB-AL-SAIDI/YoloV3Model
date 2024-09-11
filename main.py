@@ -32,8 +32,8 @@ s = [imageSize // 32, imageSize // 16, imageSize // 8]  # 52 , 26 , 13
 ###########################################################################
 #                           Apply Augmentation                            #
 ###########################################################################
-print("Apply Data Augmentation ....")
-augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", annotationsFormat=annotationsFormat)
+# print("Apply Data Augmentation ....")
+# augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", annotationsFormat=annotationsFormat)
 
 ###########################################################################
 #                           Define data transforms                        #
@@ -99,7 +99,7 @@ def main():
     ###########################################################################
     #                            Model training                               #
     ###########################################################################
-    numEpochs = 10
+    numEpochs = 1
     # indices = list(range(len(trainDataset)))
     # subData = SubsetRandomSampler(indices[:10])
     # trainLoader = DataLoader(trainDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
