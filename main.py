@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
+
+from Augmentation import augmentAndSaveData
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
     plot_couple_examples
@@ -17,6 +19,8 @@ warnings.filterwarnings("ignore")
 torch.backends.cudnn.benchmark = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+
+annotationsFormat = '.txt'
 imageSize = 416
 scale = 1.1
 anchors = [
@@ -26,9 +30,14 @@ anchors = [
 s = [imageSize // 32, imageSize // 16, imageSize // 8]  # 52 , 26 , 13
 
 ###########################################################################
+#                           Apply Augmentation                            #
+###########################################################################
+print("Apply Data Augmentation ....")
+augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", annotationsFormat=annotationsFormat)
+
+###########################################################################
 #                           Define data transforms                        #
 ###########################################################################
-
 
 transforms = A.Compose(
     [
@@ -53,7 +62,7 @@ pinMemory = True
 trainDataset = YoloDataset(
     'DataSet/train',
     'DataSet/train',
-    annotationsFormat='.xml',
+    annotationsFormat=annotationsFormat,
     s=s,
     anchors=anchors,
     transform=transforms,
@@ -64,7 +73,7 @@ trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, bat
 testDataset = YoloDataset(
     'DataSet/test',
     'DataSet/test',
-    annotationsFormat='.xml',
+    annotationsFormat=annotationsFormat,
     s=s,
     anchors=anchors,
     transform=transforms,

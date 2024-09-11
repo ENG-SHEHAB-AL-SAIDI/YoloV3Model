@@ -1,3 +1,5 @@
+from xml.dom import minidom
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
@@ -5,10 +7,94 @@ import os
 import random
 import torch
 from collections import Counter
-
 from numpy.f2py.auxfuncs import throw_error
 from tqdm import tqdm
+import xml.etree.ElementTree as eT
 
+def loadAnnotations(annotPath, annotFormat =".txt"):
+    boxes = []
+    if annotFormat == ".xml":
+        tree = eT.parse(annotPath)
+        root = tree.getroot()
+        imWidth = int(root.find('size').find('width').text)
+        imHeight = int(root.find('size').find('height').text)
+        for objectElem in root.findall('object'):
+            className = objectElem.find('name').text  # Get the class name
+            classId = 0 if className == 'LP' else -1
+            bndBox = objectElem.find('bndbox')
+
+            # Get bounding box coordinates
+            xmin = float(bndBox.find('xmin').text) / imWidth
+            ymin = float(bndBox.find('ymin').text) / imHeight
+            xmax = float(bndBox.find('xmax').text) / imWidth
+            ymax = float(bndBox.find('ymax').text) / imHeight
+
+            width = xmax - xmin
+            height = ymax - ymin
+            xCenter = xmin + width / 2
+            yCenter = ymin + height / 2
+            boxes.append([xCenter, yCenter, width, height, classId])
+
+        # Use normalized bounding box coordinates
+            # boxes.append([x_center, y_center, width, height, class_id])
+
+    elif annotFormat == ".txt":
+        with open(annotPath) as f:
+            for line in f:
+                parts = line.strip().split()
+                class_id = int(parts[0])
+                x_center, y_center, width, height = map(float, parts[1:])
+
+                # Use normalized bounding box coordinates
+                boxes.append([x_center, y_center, width, height, class_id])
+
+    return np.array(boxes)
+
+def saveAnnotations(outputPath,imageName,boxes,imageWidth,imageHeight,annotationsFormat = '.txt'):
+    if annotationsFormat == '.txt':
+        annotPath = os.path.join(outputPath, f"{imageName}.txt")
+        with open(annotPath, 'w') as f:
+            for box in boxes:
+                f.write(" ".join(map(str, box)) + "\n")
+
+    elif annotationsFormat == '.xml':
+        annotation = eT.Element("annotation")
+
+        # Create folder, filename, and path elements
+        folder = eT.SubElement(annotation, "folder").text = outputPath
+        filename = eT.SubElement(annotation, "filename").text = f"{imageName}.jpg"
+        path = eT.SubElement(annotation, "path").text = os.path.join(outputPath, f"{imageName}.jpg")
+
+        # Create size element
+        size = eT.SubElement(annotation, "size")
+        eT.SubElement(size, "width").text = str(imageWidth)
+        eT.SubElement(size, "height").text = str(imageHeight)
+        eT.SubElement(size, "depth").text = "3"
+
+        # Create object elements for each bounding box
+        for box in boxes:
+            x_center, y_center, width, height, class_id = box
+            xmin = int((x_center - width / 2) * imageWidth)
+            ymin = int((y_center - height / 2) * imageHeight)
+            xmax = int((x_center + width / 2) * imageWidth)
+            ymax = int((y_center + height / 2) * imageHeight)
+
+            obj = eT.SubElement(annotation, "object")
+            eT.SubElement(obj, "name").text = str(class_id)
+            eT.SubElement(obj, "pose").text = "Unspecified"
+            eT.SubElement(obj, "truncated").text = "0"
+            eT.SubElement(obj, "difficult").text = "0"
+            bbox = eT.SubElement(obj, "bndbox")
+            eT.SubElement(bbox, "xmin").text = str(xmin)
+            eT.SubElement(bbox, "ymin").text = str(ymin)
+            eT.SubElement(bbox, "xmax").text = str(xmax)
+            eT.SubElement(bbox, "ymax").text = str(ymax)
+
+        # Save XML file
+        xmlStr = minidom.parseString(eT.tostring(annotation)).toprettyxml(indent="   ")
+        annotPath = os.path.join(outputPath, f"{imageName}.xml")
+        with open(annotPath, 'w') as f:
+            f.write(xmlStr)
 
 def iou_width_height(boxes1, boxes2):
     """
@@ -414,7 +500,7 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def plot_image(image, boxes):
+def plotImage(image, boxes, save=False, isPred = True):
     """Plots predicted bounding boxes on the image"""
     cmap = plt.get_cmap("tab20b")
     class_labels = ["LP"]
@@ -431,33 +517,60 @@ def plot_image(image, boxes):
     # box[1] is y midpoint, box[3] is height
 
     # Create a Rectangle patch
-    for box in boxes:
-        assert len(box) == 6, "box should contain class pred, confidence, x, y, width, height"
-        class_pred = box[0]
-        box = box[2:]
-        upper_left_x = box[0] - box[2] / 2
-        upper_left_y = box[1] - box[3] / 2
-        rect = patches.Rectangle(
-            (upper_left_x * width, upper_left_y * height),
-            box[2] * width,
-            box[3] * height,
-            linewidth=2,
-            edgecolor=colors[int(class_pred)],
-            facecolor="none",
-        )
-        # Add the patch to the Axes
-        ax.add_patch(rect)
-        plt.text(
-            upper_left_x * width,
-            upper_left_y * height,
-            s=class_labels[int(class_pred)],
-            color="white",
-            verticalalignment="top",
-            bbox={"color": colors[int(class_pred)], "pad": 0},
-        )
+    if isPred:
+        for box in boxes:
+            assert len(box) == 6, "box should contain class pred, confidence, x, y, width, height"
+            class_pred = box[0]
+            box = box[2:]
+            upper_left_x = box[0] - box[2] / 2
+            upper_left_y = box[1] - box[3] / 2
+            rect = patches.Rectangle(
+                (upper_left_x * width, upper_left_y * height),
+                box[2] * width,
+                box[3] * height,
+                linewidth=2,
+                edgecolor=colors[int(class_pred)],
+                facecolor="none",
+            )
+            # Add the patch to the Axes
+            ax.add_patch(rect)
+            plt.text(
+                upper_left_x * width,
+                upper_left_y * height,
+                s=class_labels[int(class_pred)],
+                color="white",
+                verticalalignment="top",
+                bbox={"color": colors[int(class_pred)], "pad": 0},
+            )
+    else:
+            for box in boxes:
+                assert len(box) == 5, "box should contain x, y, width, height, class"
+                class_pred = box[4]
+                box = box[:4]
+                upper_left_x = box[0] - box[2] / 2
+                upper_left_y = box[1] - box[3] / 2
+                rect = patches.Rectangle(
+                    (upper_left_x * width, upper_left_y * height),
+                    box[2] * width,
+                    box[3] * height,
+                    linewidth=2,
+                    edgecolor=colors[int(class_pred)],
+                    facecolor="none",
+                )
+                # Add the patch to the Axes
+                ax.add_patch(rect)
+                plt.text(
+                    upper_left_x * width,
+                    upper_left_y * height,
+                    s=class_labels[int(class_pred)],
+                    color="white",
+                    verticalalignment="top",
+                    bbox={"color": colors[int(class_pred)], "pad": 0},
+                )
 
     plt.show()
-    plt.savefig()
+    if save:
+        plt.savefig()
 
 
 def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
@@ -482,4 +595,4 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
         nms_boxes = non_max_suppression(
             bboxes[i], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
         )
-        plot_image(x[i].permute(1,2,0).detach().cpu(), nms_boxes)
+        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes)

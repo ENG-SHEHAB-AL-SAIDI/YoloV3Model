@@ -3,51 +3,9 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from PIL import Image, ImageFile
-from Utils import iou_width_height
-import xml.etree.ElementTree as eT
-
+from Utils import iou_width_height, loadAnnotations
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-def loadAnnotations(annotPath, annotFormat =".txt"):
-    boxes = []
-    if annotFormat == ".xml":
-        tree = eT.parse(annotPath)
-        root = tree.getroot()
-        imWidth = int(root.find('size').find('width').text)
-        imHeight = int(root.find('size').find('height').text)
-        for objectElem in root.findall('object'):
-            className = objectElem.find('name').text  # Get the class name
-            classId = 0 if className == 'LP' else -1
-            bndBox = objectElem.find('bndbox')
-
-            # Get bounding box coordinates
-            xmin = float(bndBox.find('xmin').text) / imWidth
-            ymin = float(bndBox.find('ymin').text) / imHeight
-            xmax = float(bndBox.find('xmax').text) / imWidth
-            ymax = float(bndBox.find('ymax').text) / imHeight
-
-            width = xmax - xmin
-            height = ymax - ymin
-            xCenter = xmin + width / 2
-            yCenter = ymin + height / 2
-            boxes.append([xCenter, yCenter, width, height, classId])
-
-        # Use normalized bounding box coordinates
-            # boxes.append([x_center, y_center, width, height, class_id])
-
-    elif annotFormat == ".txt":
-        with open(annotPath) as f:
-            for line in f:
-                parts = line.strip().split()
-                class_id = int(parts[0])
-                x_center, y_center, width, height = map(float, parts[1:])
-
-                # Use normalized bounding box coordinates
-                boxes.append([x_center, y_center, width, height, class_id])
-
-    return np.array(boxes)
-
 
 class YoloDataset(Dataset):
     def __init__(self,
