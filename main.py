@@ -1,13 +1,14 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
 from yaml import warnings
 
 from DataSet import YoloDataset
-from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision
+from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
+    plot_couple_examples
 from YoloLoss import YoloLoss
 from YoloModel import YOLOv3
 from tqdm import tqdm
@@ -15,7 +16,7 @@ from colorama import Fore
 import warnings
 
 warnings.filterwarnings("ignore")
-
+torch.backends.cudnn.benchmark = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 imageSize = 416
@@ -76,8 +77,8 @@ test_transforms = A.Compose(
 ###########################################################################
 #                            Loading Data                                 #
 ###########################################################################
-numWorkers = 1
-batchSize = 4
+numWorkers = 4
+batchSize = 32
 dropLast = False
 pinMemory = True
 
@@ -86,21 +87,21 @@ trainDataset = YoloDataset(
     'DataSet/train',
     s=s,
     anchors=anchors,
-    transform=test_transforms,
+    transform=train_transforms,
 )
 trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
                          drop_last=dropLast, pin_memory=pinMemory)
 
 
-# testDataset = YoloDataset(
-#     'DataSet/test',
-#     'DataSet/test',
-#     s=s,
-#     anchors=anchors,
-#     transform=test_transforms,
-# )
-# testLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-#                         drop_last=dropLast, pin_memory=pinMemory)
+testDataset = YoloDataset(
+    'DataSet/test',
+    'DataSet/test',
+    s=s,
+    anchors=anchors,
+    transform=test_transforms,
+)
+testLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+                        drop_last=dropLast, pin_memory=pinMemory)
 
 
 
@@ -113,15 +114,18 @@ def main():
     model = YOLOv3(numClasses=1, numAnchors=3).to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-4)
     lossFunc = YoloLoss()
-    scaler = torch.amp.GradScaler(device)
-    scaledAnchors = (torch.tensor(anchors) * torch.tensor(s).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)).to(device)
+    scaler = torch.cuda.amp.GradScaler()
+    scaledAnchors = (torch.tensor(anchors) * torch.tensor(s).unsqueeze(1).unsqueeze(2).repeat(1, 3, 2)).to(device)
     # loadModelState("ModelStatus/modelState.pth.tar",
     #                model=model, optimizer=optimizer, lr=lr, device=device)
 
-    ###########################################################################
-    #                            Model training                               #
-    ###########################################################################
-    numEpochs = 1
+###########################################################################
+#                            Model training                               #
+###########################################################################
+    numEpochs = 10
+    # indices = list(range(len(trainDataset)))
+    # subData = SubsetRandomSampler(indices[:10])
+    # subLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=subData)
     for epoch in range(numEpochs):
         model.train()
         loop = tqdm(trainLoader, leave=True, desc=Fore.LIGHTWHITE_EX + f'Epoch {epoch + 1}/{numEpochs}')
@@ -161,43 +165,47 @@ def main():
             loop.set_postfix(loss=mean_loss)
 
         # if epoch >= 0 and epoch % 3 == 0:
-        acc = check_class_accuracy(model, trainLoader, threshold=0.05, device=device)
 
-        print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
-        print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
-        print(f"Obj accuracy is: {acc[2]:2f}%")
+###########################################################################
+#                            Model training                               #
+###########################################################################
+    print("Evaluate Model")
+    model.eval()
+    with torch.no_grad():
+            acc = check_class_accuracy(model, testLoader, threshold=0.05, device=device)
+            print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
+            print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
+            print(f"Obj accuracy is: {acc[2]:2f}%")
 
-        pred_boxes, true_boxes = get_evaluation_bboxes(
-            trainLoader,
-            model,
-            iou_threshold=0.45,
-            anchors=anchors,
-            threshold=0.005,
-            device=device
-        )
+            # pred_boxes, true_boxes = get_evaluation_bboxes(
+            #     testLoader,
+            #     model,
+            #     iou_threshold=0.45,
+            #     anchors=anchors,
+            #     threshold=0.005,
+            #     device=device
+            # )
+            #
+            # print("cal map")
+            # mapval = mean_average_precision(
+            #     pred_boxes,
+            #     true_boxes,
+            #     iou_threshold=0.5,
+            #     box_format="midpoint",
+            #     num_classes=1,
+            #
+            # )
+            # print(f"MAP: {mapval.item()}")
 
-        print("cal map")
-        mapval = mean_average_precision(
-            pred_boxes,
-            true_boxes,
-            iou_threshold=0.5,
-            box_format="midpoint",
-            num_classes=1,
 
-        )
-        print(f"MAP: {mapval.item()}")
+###########################################################################
+#                            Model result show                            #
+###########################################################################
 
-
-# # Test model
-# model.eval()
-# with torch.no_grad():
-#     for images, targets in test_loader:
-#         outputs = model(images)
-#         # Post-processing would be done here, such as applying NMS
-#         # Example: print output shapes
-#         for out in outputs:
-#             print(out.shape)
-
+    indices = list(range(len(trainDataset)))
+    subData = SubsetRandomSampler(indices[:10])
+    subLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=subData)
+    plot_couple_examples(model= model,loader= subLoader, iou_thresh=0.45,anchors=anchors,thresh=0.05,)
 
 if __name__ == "__main__":
     main()

@@ -54,7 +54,7 @@ class YoloLoss(nn.Module):
         # ================== #
 
         classLoss = self.entropy(
-            (predictions[..., 5:][obj]), (target[...,5:][obj]),
+            (predictions[..., 5:][obj]), (target[...,5][obj].long()),
         )
 
         # print("__________________________________")

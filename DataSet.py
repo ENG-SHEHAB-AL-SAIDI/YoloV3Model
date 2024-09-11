@@ -2,11 +2,13 @@ import os
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+from PIL import Image, ImageFile
 
-from Utils import iou_width_height
+from Utils import iou_width_height, cells_to_bboxes
 import xml.etree.ElementTree as ET
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def load_annotations(annot_path):
     boxes = []
@@ -16,7 +18,7 @@ def load_annotations(annot_path):
     imHeight = int(root.find('size').find('height').text)
     for objectElem in root.findall('object'):
         className = objectElem.find('name').text  # Get the class name
-        classId = 1 if className=="LP" else 0
+        classId = 0
         bndbox = objectElem.find('bndbox')
 
         # Get bounding box coordinates
@@ -80,7 +82,7 @@ class YoloDataset(Dataset):
             image = augmentations["image"]
             boxes = augmentations["bboxes"]
 
-        targets = [torch.zeros(self.numAnchors // 3, S, S, 6) for S in self.s]
+        targets = [torch.zeros(self.numAnchors // self.numAnchorsPerScale, S, S, 6) for S in self.s]
         # Convert list of boxes to tensor
         for box in boxes:
             iouAnchors = iou_width_height(torch.tensor(box[2:4]), self.anchors)
@@ -115,26 +117,43 @@ class YoloDataset(Dataset):
 
 
 
-# Testing
-# imageSize = 416
-# scale = 1.1
-# anchors = [
-#     [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
-#     [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
-#     [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ]
+# def main():
+#     # Testing
+#     imageSize = 416
+#     scale = 1.1
+#     anchors = [
+#         [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
+#         [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+#         [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)], ]
 #
-# s = [imageSize // 32, imageSize // 16, imageSize // 8] # 52 , 26 , 13
-# numWorkers = 1
-# batchSize = 4
-# dropLast = False
-# pinMemory = True
+#     s = [imageSize // 32, imageSize // 16, imageSize // 8]  # 52 , 26 , 13
+#     numWorkers = 1
+#     batchSize = 2
+#     dropLast = False
+#     pinMemory = True
 #
-# trainDataset = YoloDataset(
-#     'DataSet/train',
-#     'DataSet/train',
-#     s=s,
-#     anchors=anchors,
-#     transform=None,
-# ).__getitem__(0)
-# trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
-#                          drop_last=dropLast, pin_memory=pinMemory)
+#     trainDataset = YoloDataset(
+#         'DataSet/train',
+#         'DataSet/train',
+#         s=s,
+#         anchors=anchors,
+#         transform=None,
+#     )
+#     # trainLoader = DataLoader(trainDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+#     #                          drop_last=dropLast, pin_memory=pinMemory)
+#     indices = list(range(len(trainDataset)))
+#     subData = SubsetRandomSampler(indices[:5])
+#     trainLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=subData)
+#
+#     anchor = torch.tensor([*anchors[2]]) * 52
+#     for x, y in trainLoader:
+#         bbox = cells_to_bboxes(y[2],anchor,52,is_preds= False)
+#         print(bbox)
+#         break
+#
+#
+#     # bbox = cells_to_bboxes(trainDataset[1][0],anchor,13,is_preds= False)
+#
+#
+# if __name__ == "__main__":
+#     main()
