@@ -57,7 +57,7 @@ def saveAnnotations(outputPath,imageName,boxes,imageWidth,imageHeight,annotation
         with open(annotPath, 'w') as f:
             for box in boxes:
                 # Ensure each box is a list/tuple with class label first followed by bounding box coordinates
-                classLabel = box[0]  # Assuming the class is the first element in the box
+                classLabel = int(box[0])  # Assuming the class is the first element in the box
                 bboxCoords = box[1:]  # The rest are the bounding box coordinates
                 # Write the class and the bounding box coordinates to the file
                 f.write(f"{classLabel} " + " ".join(map(str, bboxCoords)) + "\n")

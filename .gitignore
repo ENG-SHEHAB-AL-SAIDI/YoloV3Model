@@ -1,2 +1,4 @@
 .idea/
 DataSet/
+__pycache__
+*.zip

@@ -4,11 +4,11 @@ from torch.utils.data import DataLoader
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
-
+from datetime import datetime
 from Augmentation import augmentAndSaveData
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
-    plot_couple_examples
+    plot_couple_examples, saveModelState
 from YoloLoss import YoloLoss
 from YoloModel import YOLOv3
 from tqdm import tqdm
@@ -19,6 +19,8 @@ warnings.filterwarnings("ignore")
 torch.backends.cudnn.benchmark = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+if device == "cuda":
+    torch.cuda.empty_cache()
 
 annotationsFormat = '.txt'
 imageSize = 416
@@ -93,13 +95,12 @@ def main():
     lossFunc = YoloLoss()
     scaler = torch.cuda.amp.GradScaler()
     scaledAnchors = (torch.tensor(anchors) * torch.tensor(s).unsqueeze(1).unsqueeze(2).repeat(1, 3, 2)).to(device)
-    # loadModelState("ModelStatus/modelState.pth.tar",
-    #                model=model, optimizer=optimizer, lr=learnRate, device=device)
-
+    loadModelState("ModelStatus/checkpoint04-53-40-AM.pth.tar",
+                   model=model, optimizer=optimizer, lr=learnRate, device=device)
     ###########################################################################
     #                            Model training                               #
     ###########################################################################
-    numEpochs = 1
+    numEpochs = 10
     # indices = list(range(len(trainDataset)))
     # subData = SubsetRandomSampler(indices[:10])
     # trainLoader = DataLoader(trainDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
@@ -146,52 +147,52 @@ def main():
             mean_loss = sum(losses) / len(losses)
             loop.set_postfix(loss=mean_loss)
 
-        # if epoch >= 0 and epoch % 3 == 0:
+        ###########################################################################
+        #                            Model Evaluate                               #
+        ###########################################################################
+        if epoch >= 0 and epoch % 5 == 0:
+            saveModelState(model, optimizer, f"ModelStatus/checkpoint{datetime.now().strftime("%I-%M-%S-%p")}.pth.tar")
+            print("Evaluate Model")
+            model.eval()
+            with torch.no_grad():
+                acc = check_class_accuracy(model, testLoader, threshold=0.05, device=device)
+                print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
+                print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
+                print(f"Obj accuracy is: {acc[2]:2f}%")
 
-    ###########################################################################
-    #                            Model Evaluate                               #
-    ###########################################################################
-    print("Evaluate Model")
-    model.eval()
-    with torch.no_grad():
-        acc = check_class_accuracy(model, testLoader, threshold=0.05, device=device)
-        print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
-        print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
-        print(f"Obj accuracy is: {acc[2]:2f}%")
+                # pred_boxes, true_boxes = get_evaluation_bboxes(
+                #     testLoader,
+                #     model,
+                #     iou_threshold=0.45,
+                #     anchors=anchors,
+                #     threshold=0.005,
+                #     device=device
+                # )
+                #
+                # print("cal map")
+                # mapval = mean_average_precision(
+                #     pred_boxes,
+                #     true_boxes,
+                #     iou_threshold=0.5,
+                #     box_format="midpoint",
+                #     num_classes=1,
+                #
+                # )
+                # print(f"MAP: {mapval.item()}")
 
-        # pred_boxes, true_boxes = get_evaluation_bboxes(
-        #     testLoader,
-        #     model,
-        #     iou_threshold=0.45,
-        #     anchors=anchors,
-        #     threshold=0.005,
-        #     device=device
-        # )
-        #
-        # print("cal map")
-        # mapval = mean_average_precision(
-        #     pred_boxes,
-        #     true_boxes,
-        #     iou_threshold=0.5,
-        #     box_format="midpoint",
-        #     num_classes=1,
-        #
-        # )
-        # print(f"MAP: {mapval.item()}")
+            ###########################################################################
+            #                            Model result show                            #
+            ###########################################################################
 
-    ###########################################################################
-    #                            Model result show                            #
-    ###########################################################################
+            # indices = list(range(len(trainDataset)))
+            # subData = SubsetRandomSampler(indices[:10])
+            # subTrainLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+            #                        drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
+            #
+            # subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+            #                     drop_last=dropLast, pin_memory=pinMemory,sampler=subData)
 
-    # indices = list(range(len(trainDataset)))
-    # subData = SubsetRandomSampler(indices[:10])
-    # subTrainLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-    #                        drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
-    #
-    # subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-    #                     drop_last=dropLast, pin_memory=pinMemory,sampler=subData)
-
-    # plot_couple_examples(model=model, loader=subLoader, iou_thresh=0.45, anchors=anchors, thresh=0.05, )
+            # plot_couple_examples(model=model, loader=subLoader, iou_thresh=0.45, anchors=anchors, thresh=0.05, )
 
 
 if __name__ == "__main__":
