@@ -95,8 +95,8 @@ def main():
     lossFunc = YoloLoss()
     scaler = torch.cuda.amp.GradScaler()
     scaledAnchors = (torch.tensor(anchors) * torch.tensor(s).unsqueeze(1).unsqueeze(2).repeat(1, 3, 2)).to(device)
-    loadModelState("ModelStatus/checkpoint04-53-40-AM.pth.tar",
-                   model=model, optimizer=optimizer, lr=learnRate, device=device)
+    loadModelState("ModelStatus/",
+                   model=model, optimizer=optimizer, lr=learnRate, device=device, loadLastModelState=True)
     ###########################################################################
     #                            Model training                               #
     ###########################################################################

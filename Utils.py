@@ -11,7 +11,8 @@ from numpy.f2py.auxfuncs import throw_error
 from tqdm import tqdm
 import xml.etree.ElementTree as eT
 
-def loadAnnotations(annotPath, annotFormat =".txt"):
+
+def loadAnnotations(annotPath, annotFormat=".txt"):
     boxes = []
     if annotFormat == ".xml":
         tree = eT.parse(annotPath)
@@ -36,7 +37,7 @@ def loadAnnotations(annotPath, annotFormat =".txt"):
             boxes.append([xCenter, yCenter, width, height, classId])
 
         # Use normalized bounding box coordinates
-            # boxes.append([x_center, y_center, width, height, class_id])
+        # boxes.append([x_center, y_center, width, height, class_id])
 
     elif annotFormat == ".txt":
         with open(annotPath) as f:
@@ -50,8 +51,8 @@ def loadAnnotations(annotPath, annotFormat =".txt"):
 
     return np.array(boxes)
 
-def saveAnnotations(outputPath,imageName,boxes,imageWidth,imageHeight,annotationsFormat = '.txt'):
 
+def saveAnnotations(outputPath, imageName, boxes, imageWidth, imageHeight, annotationsFormat='.txt'):
     if annotationsFormat == '.txt':
         annotPath = os.path.join(outputPath, f"{imageName}.txt")
         with open(annotPath, 'w') as f:
@@ -100,6 +101,7 @@ def saveAnnotations(outputPath,imageName,boxes,imageWidth,imageHeight,annotation
         annotPath = os.path.join(outputPath, f"{imageName}.xml")
         with open(annotPath, 'w') as f:
             f.write(xmlStr)
+
 
 def iou_width_height(boxes1, boxes2):
     """
@@ -465,26 +467,49 @@ def get_mean_std(loader):
     return mean, std
 
 
-def saveModelState(model, optimizer, filePath="my_checkpoint.pth.tar"):
+def saveModelState(model, optimizer, filePath="my_checkpoint.pth.tar", CreateLastModelState=True):
     if filePath == "": return
     os.makedirs(os.path.dirname(filePath), exist_ok=True)
-    print("=> Saving Model")
+    print(f"=> Saving ModelState to {filePath}")
     state = {
         "state_dict": model.state_dict(),
         "optimizer": optimizer.state_dict(),
     }
     torch.save(state, filePath)
+    if CreateLastModelState:
+        lastModelStatePath = os.path.join(os.path.dirname(filePath), f"lastModelState.txt")
+        with open(lastModelStatePath, 'w') as f:
+             f.write(f"{filePath}")
     print("saving model state successful")
 
 
-def loadModelState(modelStateFilePath, model, optimizer, lr, device):
+def loadModelState(modelStateFilePath, model, optimizer, lr, device, loadLastModelState=False):
+
     if not os.path.exists(modelStateFilePath):
         print(f"{modelStateFilePath} doesn't exist")
         return
-    elif modelStateFilePath == "":
+    elif modelStateFilePath == "": return
+    if loadLastModelState and os.path.isdir(modelStateFilePath):
+        if not os.path.exists(os.path.dirname(modelStateFilePath)):
+            print(f"{modelStateFilePath} doesn't exist")
+            return
+        lastModelStatePath = os.path.join(modelStateFilePath, "lastModelState.txt")
+        if not os.path.exists(os.path.dirname(lastModelStatePath)):
+            print(f"{lastModelStatePath} doesn't exist")
+            return
+        with open(lastModelStatePath) as f:
+            for line in f:
+                modelStateFilePath = line
+    elif not loadLastModelState and os.path.isdir(modelStateFilePath):
+        print("you provide Directory path with loadLastModelState=False ")
+        print("please provide modelState.pth.tar or set loadLastModelState=True")
+        return
+    elif loadLastModelState and not os.path.isdir(modelStateFilePath):
+        print("you set loadLastModelState=True ")
+        print("please provide Directory path with loadLastModelState and  modelState.pth.tar")
         return
 
-    print("=> Loading state")
+    print(f"=> Loading {modelStateFilePath}")
     state = torch.load(modelStateFilePath, map_location=device)
     model.load_state_dict(state["state_dict"])
     optimizer.load_state_dict(state["optimizer"])
@@ -505,7 +530,7 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def plotImage(image, boxes, save=False, isPred = True):
+def plotImage(image, boxes, save=False, isPred=True):
     """Plots predicted bounding boxes on the image"""
     cmap = plt.get_cmap("tab20b")
     class_labels = ["LP"]
@@ -548,30 +573,30 @@ def plotImage(image, boxes, save=False, isPred = True):
                 bbox={"color": colors[int(class_pred)], "pad": 0},
             )
     else:
-            for box in boxes:
-                assert len(box) == 5, "box should contain x, y, width, height, class"
-                class_pred = box[4]
-                box = box[:4]
-                upper_left_x = box[0] - box[2] / 2
-                upper_left_y = box[1] - box[3] / 2
-                rect = patches.Rectangle(
-                    (upper_left_x * width, upper_left_y * height),
-                    box[2] * width,
-                    box[3] * height,
-                    linewidth=2,
-                    edgecolor=colors[int(class_pred)],
-                    facecolor="none",
-                )
-                # Add the patch to the Axes
-                ax.add_patch(rect)
-                plt.text(
-                    upper_left_x * width,
-                    upper_left_y * height,
-                    s=class_labels[int(class_pred)],
-                    color="white",
-                    verticalalignment="top",
-                    bbox={"color": colors[int(class_pred)], "pad": 0},
-                )
+        for box in boxes:
+            assert len(box) == 5, "box should contain x, y, width, height, class"
+            class_pred = box[4]
+            box = box[:4]
+            upper_left_x = box[0] - box[2] / 2
+            upper_left_y = box[1] - box[3] / 2
+            rect = patches.Rectangle(
+                (upper_left_x * width, upper_left_y * height),
+                box[2] * width,
+                box[3] * height,
+                linewidth=2,
+                edgecolor=colors[int(class_pred)],
+                facecolor="none",
+            )
+            # Add the patch to the Axes
+            ax.add_patch(rect)
+            plt.text(
+                upper_left_x * width,
+                upper_left_y * height,
+                s=class_labels[int(class_pred)],
+                color="white",
+                verticalalignment="top",
+                bbox={"color": colors[int(class_pred)], "pad": 0},
+            )
 
     plt.show()
     if save:
