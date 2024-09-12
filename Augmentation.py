@@ -7,11 +7,11 @@ import albumentations as A
 import cv2
 from matplotlib.pyplot import figure
 from Utils import loadAnnotations, plotImage, saveAnnotations
+import random
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 imageSize = 416
 scale = 1.1
-
 augTransforms = A.Compose(
         [
             # Ensure crop size is valid
@@ -45,6 +45,51 @@ augTransforms = A.Compose(
         ],
         bbox_params=A.BboxParams(format="yolo", min_visibility=0.4, label_fields=[], check_each_transform=True),
     )
+
+
+# Define the augmentation pipeline for generating no-object samples
+noObjectAug = A.Compose([
+    A.RandomResizedCrop(height=416, width=416, scale=(0.3, 1.0), ratio=(0.75, 1.33), p=0.7),
+    A.OneOf([
+        A.HorizontalFlip(p=0.5),
+        A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.GaussianBlur(blur_limit=5, p=0.3),
+    ], p=0.7),
+    A.CoarseDropout(max_holes=10, max_height=32, max_width=32, min_holes=1, min_height=16, min_width=16, fill_value=0,
+                    p=0.5)
+])
+# Function to generate no-object samples and handle bbox annotations
+def generateNoObjectSamples(imageDir, annotationDir, imageOutputDir, annotationOutputDir, numSamples):
+    # Get list of image files
+    imageFiles = [os.path.join(imageDir, img) for img in os.listdir(imageDir) if
+                  img.endswith(('.png', '.jpg', '.jpeg'))]
+
+    # Ensure output directories exist
+    os.makedirs(imageOutputDir, exist_ok=True)
+    os.makedirs(annotationOutputDir, exist_ok=True)
+
+    for i in range(numSamples):
+        # Choose a random image from the dataset
+        imagePath = random.choice(imageFiles)
+        image = cv2.imread(imagePath)
+
+        # Apply augmentation
+        augmented = noObjectAug(image=image)
+        augmentedImage = augmented['image']
+
+        # Save the augmented image
+        outputFileName = os.path.join(imageOutputDir, f'no_obj_{i}.jpg')
+        cv2.imwrite(outputFileName, augmentedImage)
+
+        # Create an empty annotation file for the no-object image
+        annotationFilePath = os.path.join(annotationOutputDir, f'no_obj_{i}.txt')
+        with open(annotationFilePath, 'w') as f:
+            f.write("")  # Write an empty string to create a blank annotation file
+
+        print(f"Saved: {outputFileName} and created empty annotation: {annotationFilePath}")
+
+
 
 
 

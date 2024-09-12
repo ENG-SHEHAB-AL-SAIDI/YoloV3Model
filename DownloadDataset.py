@@ -5,7 +5,8 @@ import os
 
 # Define the URL of the file and the destination path in Google Drive
 # file_url = 'https://www.kaggle.com/api/v1/datasets/download/achrafkhazri/labeled-licence-plates-dataset?datasetVersionNumber=1'
-file_url = "https://universe.roboflow.com/ds/l3Qr1KhN8Z?key=uHBWnKzZ8D"
+# file_url = "https://universe.roboflow.com/ds/l3Qr1KhN8Z?key=uHBWnKzZ8D"
+file_url = "https://universe.roboflow.com/ds/LQYLO2aBWG?key=uQsgjBIqPH"
 destination_path = 'archive.zip'
 extraction_dir = './DataSet'
 

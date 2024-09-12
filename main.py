@@ -5,7 +5,7 @@ from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
 from datetime import datetime
-from Augmentation import augmentAndSaveData
+from Augmentation import augmentAndSaveData, generateNoObjectSamples
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
     plot_couple_examples, saveModelState
@@ -34,8 +34,11 @@ s = [imageSize // 32, imageSize // 16, imageSize // 8]  # 52 , 26 , 13
 ###########################################################################
 #                           Apply Augmentation                            #
 ###########################################################################
-# print("Apply Data Augmentation ....")
-# augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", annotationsFormat=annotationsFormat)
+print("Apply Data Augmentation ....")
+# augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", imagesOutputDir="DataSet/train-aug",
+#                    annotationsOutputDir="DataSet/train-aug", annotationsFormat=annotationsFormat,
+#                    numAug=3)
+generateNoObjectSamples("DataSet/train", "DataSet/train", "DataSet/train-noObj", "DataSet/train-noObj", 1000)
 
 ###########################################################################
 #                           Define data transforms                        #
