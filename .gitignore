@@ -1,6 +1,5 @@
 .idea/
 DataSet/
-__pycache__
 ModelStatus/*
 !ModelStatus/lastModelState.txt
 *.zip

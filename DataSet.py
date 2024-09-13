@@ -48,9 +48,14 @@ class YoloDataset(Dataset):
 
         # Apply transformations
         if self.transform:
-            augmentations = self.transform(image=image, bboxes=boxes)
-            image = augmentations["image"]
-            boxes = augmentations["bboxes"]
+            if self.transform:
+                if len(boxes) == 0:
+                    augmentations = self.transform(image=image)
+                    image = augmentations["image"]
+                else:
+                    augmentations = self.transform(image=image, bboxes=boxes)
+                    image = augmentations["image"]
+                    boxes = augmentations["bboxes"]
 
 
         targets = [torch.zeros(self.numAnchors // self.numAnchorsPerScale, S, S, 6) for S in self.s]

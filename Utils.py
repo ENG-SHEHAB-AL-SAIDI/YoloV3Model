@@ -1,5 +1,4 @@
 from xml.dom import minidom
-
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
@@ -7,7 +6,6 @@ import os
 import random
 import torch
 from collections import Counter
-from numpy.f2py.auxfuncs import throw_error
 from tqdm import tqdm
 import xml.etree.ElementTree as eT
 
@@ -367,6 +365,7 @@ def get_evaluation_bboxes(
                 if box[1] > threshold:
                     all_true_boxes.append([train_idx] + box)
 
+            print(train_idx)
             train_idx += 1
 
     model.train()
@@ -485,16 +484,12 @@ def saveModelState(model, optimizer, filePath="my_checkpoint.pth.tar", CreateLas
 
 def loadModelState(modelStateFilePath, model, optimizer, lr, device, loadLastModelState=False):
 
-    if not os.path.exists(modelStateFilePath):
-        print(f"{modelStateFilePath} doesn't exist")
-        return
-    elif modelStateFilePath == "": return
     if loadLastModelState and os.path.isdir(modelStateFilePath):
         if not os.path.exists(os.path.dirname(modelStateFilePath)):
             print(f"{modelStateFilePath} doesn't exist")
             return
         lastModelStatePath = os.path.join(modelStateFilePath, "lastModelState.txt")
-        if not os.path.exists(os.path.dirname(lastModelStatePath)):
+        if not os.path.exists(os.path.exists(lastModelStatePath)):
             print(f"{lastModelStatePath} doesn't exist")
             return
         with open(lastModelStatePath) as f:
@@ -508,6 +503,12 @@ def loadModelState(modelStateFilePath, model, optimizer, lr, device, loadLastMod
         print("you set loadLastModelState=True ")
         print("please provide Directory path with loadLastModelState and  modelState.pth.tar")
         return
+
+
+    if not os.path.exists(modelStateFilePath):
+        print(f"{modelStateFilePath} doesn't exist")
+        return
+    elif modelStateFilePath == "": return
 
     print(f"=> Loading {modelStateFilePath}")
     state = torch.load(modelStateFilePath, map_location=device)

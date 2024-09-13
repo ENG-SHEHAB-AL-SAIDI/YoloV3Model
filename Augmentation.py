@@ -1,12 +1,9 @@
 import os
-import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image,ImageFile
-from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
-from matplotlib.pyplot import figure
-from Utils import loadAnnotations, plotImage, saveAnnotations
+from Utils import loadAnnotations, saveAnnotations
 import random
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True

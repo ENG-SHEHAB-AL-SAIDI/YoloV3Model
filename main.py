@@ -5,7 +5,6 @@ from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
 from datetime import datetime
-from Augmentation import augmentAndSaveData, generateNoObjectSamples
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
     plot_couple_examples, saveModelState
@@ -14,8 +13,9 @@ from YoloModel import YOLOv3
 from tqdm import tqdm
 from colorama import Fore
 import warnings
-
 warnings.filterwarnings("ignore")
+
+
 torch.backends.cudnn.benchmark = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -34,11 +34,11 @@ s = [imageSize // 32, imageSize // 16, imageSize // 8]  # 52 , 26 , 13
 ###########################################################################
 #                           Apply Augmentation                            #
 ###########################################################################
-print("Apply Data Augmentation ....")
+# print("Apply Data Augmentation ....")
 # augmentAndSaveData(imagesDir="DataSet/train", annotationsDir="DataSet/train", imagesOutputDir="DataSet/train-aug",
 #                    annotationsOutputDir="DataSet/train-aug", annotationsFormat=annotationsFormat,
 #                    numAug=3)
-generateNoObjectSamples("DataSet/train", "DataSet/train", "DataSet/train-noObj", "DataSet/train-noObj", 1000)
+# generateNoObjectSamples("DataSet/train", "DataSet/train", "DataSet/train-noObj", "DataSet/train-noObj", 1000)
 
 ###########################################################################
 #                           Define data transforms                        #
@@ -153,8 +153,8 @@ def main():
         ###########################################################################
         #                            Model Evaluate                               #
         ###########################################################################
-        if epoch >= 0 and epoch % 5 == 0:
-            saveModelState(model, optimizer, f"ModelStatus/checkpoint{datetime.now().strftime("%I-%M-%S-%p")}.pth.tar")
+        if epoch > 0 and epoch % 5 == 0:
+            saveModelState(model, optimizer, f"ModelStatus/checkpoint{datetime.now().strftime('%I-%M-%S-%p')}.pth.tar")
             print("Evaluate Model")
             model.eval()
             with torch.no_grad():
