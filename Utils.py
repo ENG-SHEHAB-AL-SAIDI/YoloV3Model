@@ -351,7 +351,6 @@ def get_evaluation_bboxes(
         true_bboxes = cells_to_bboxes(labels[2], anchor, S=S, is_preds=False)
 
         for idx in range(batch_size):
-            print(len(bboxes[idx]))
             nms_boxes = non_max_suppression(
                 bboxes[idx],
                 iou_threshold=iou_threshold,
@@ -364,8 +363,6 @@ def get_evaluation_bboxes(
             for box in true_bboxes[idx]:
                 if box[1] > threshold:
                     all_true_boxes.append([train_idx] + box)
-
-            print(train_idx)
             train_idx += 1
 
     model.train()
@@ -531,7 +528,7 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def plotImage(image, boxes, save=False, isPred=True):
+def plotImage(image, boxes, savePath="", index = 0,isPred=True):
     """Plots predicted bounding boxes on the image"""
     cmap = plt.get_cmap("tab20b")
     class_labels = ["LP"]
@@ -599,21 +596,22 @@ def plotImage(image, boxes, save=False, isPred=True):
                 bbox={"color": colors[int(class_pred)], "pad": 0},
             )
 
+    if savePath != "":
+        plt.savefig(os.path.join(savePath,f'figure_{index}.png'))
     plt.show()
-    if save:
-        plt.savefig()
 
 
-def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
+
+def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, savePath = "" ):
     model.eval()
     x, y = next(iter(loader))
-    x = x.to("cuda")
+    x = x.to(device)
     with torch.no_grad():
         out = model(x)
         bboxes = [[] for _ in range(x.shape[0])]
         for i in range(3):
             batch_size, A, S, _, _ = out[i].shape
-            anchor = anchors[i]
+            anchor = torch.tensor([*anchors[i]]).to(device) * S
             boxes_scale_i = cells_to_bboxes(
                 out[i], anchor, S=S, is_preds=True
             )
@@ -626,4 +624,4 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
         nms_boxes = non_max_suppression(
             bboxes[i], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
         )
-        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes)
+        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath = savePath ,index=i)
