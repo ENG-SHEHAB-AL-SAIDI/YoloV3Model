@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from albumentations.pytorch import ToTensorV2
 import albumentations as A
 import cv2
@@ -13,8 +13,8 @@ from YoloModel import YOLOv3
 from tqdm import tqdm
 from colorama import Fore
 import warnings
-warnings.filterwarnings("ignore")
 
+warnings.filterwarnings("ignore")
 
 torch.backends.cudnn.benchmark = True
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -74,6 +74,17 @@ trainDataset = YoloDataset(
 )
 trainLoader = DataLoader(trainDataset, shuffle=True, num_workers=numWorkers, batch_size=batchSize,
                          drop_last=dropLast, pin_memory=pinMemory)
+
+validationDataset = YoloDataset(
+    'DataSet/test',
+    'DataSet/test',
+    annotationsFormat=annotationsFormat,
+    s=s,
+    anchors=anchors,
+    transform=transforms,
+)
+validationLoader = DataLoader(validationDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+                              drop_last=dropLast, pin_memory=pinMemory)
 
 testDataset = YoloDataset(
     'DataSet/test',
@@ -151,51 +162,77 @@ def main():
             loop.set_postfix(loss=mean_loss)
 
         ###########################################################################
-        #                            Model Evaluate                               #
+        #                            Model Validation                             #
         ###########################################################################
         if epoch > 0 and epoch % 5 == 0:
             saveModelState(model, optimizer, f"ModelStatus/checkpoint{datetime.now().strftime('%I-%M-%S-%p')}.pth.tar")
             print("Evaluate Model")
             model.eval()
             with torch.no_grad():
-                acc = check_class_accuracy(model, testLoader, threshold=0.05, device=device)
+                acc = check_class_accuracy(model, validationLoader, threshold=0.05, device=device)
                 print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
                 print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
                 print(f"Obj accuracy is: {acc[2]:2f}%")
 
-                # pred_boxes, true_boxes = get_evaluation_bboxes(
-                #     testLoader,
-                #     model,
-                #     iou_threshold=0.45,
-                #     anchors=anchors,
-                #     threshold=0.005,
-                #     device=device
-                # )
-                #
-                # print("cal map")
-                # mapval = mean_average_precision(
-                #     pred_boxes,
-                #     true_boxes,
-                #     iou_threshold=0.5,
-                #     box_format="midpoint",
-                #     num_classes=1,
-                #
-                # )
-                # print(f"MAP: {mapval.item()}")
+                pred_boxes, true_boxes = get_evaluation_bboxes(
+                    validationLoader,
+                    model,
+                    iou_threshold=0.45,
+                    anchors=anchors,
+                    threshold=0.5,
+                    device=device
+                )
 
-            ###########################################################################
-            #                            Model result show                            #
-            ###########################################################################
+                print("cal map")
+                mapval = mean_average_precision(
+                    pred_boxes,
+                    true_boxes,
+                    iou_threshold=0.5,
+                    box_format="midpoint",
+                    num_classes=1,
 
-            # indices = list(range(len(trainDataset)))
-            # subData = SubsetRandomSampler(indices[:10])
-            # subTrainLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-            #                        drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
-            #
-            # subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
-            #                     drop_last=dropLast, pin_memory=pinMemory,sampler=subData)
+                )
+                print(f"MAP: {mapval.item()}")
 
-            # plot_couple_examples(model=model, loader=subLoader, iou_thresh=0.45, anchors=anchors, thresh=0.05, )
+    ###########################################################################
+    #                            Model Test                                   #
+    ###########################################################################
+
+    model.eval()
+    with torch.no_grad():
+        acc = check_class_accuracy(model, testLoader, threshold=0.05, device=device)
+        print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
+        print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
+        print(f"Obj accuracy is: {acc[2]:2f}%")
+
+        pred_boxes, true_boxes = get_evaluation_bboxes(
+            testLoader,
+            model,
+            iou_threshold=0.45,
+            anchors=anchors,
+            threshold=0.5,
+            device=device
+        )
+        print("cal map")
+        mapval = mean_average_precision(
+            pred_boxes,
+            true_boxes,
+            iou_threshold=0.5,
+            box_format="midpoint",
+            num_classes=1,
+        )
+        print(f"MAP: {mapval.item()}")
+
+        ###########################################################################
+        #                            Model result show                            #
+        ###########################################################################
+
+    indices = list(range(len(testDataset)))
+    subData = SubsetRandomSampler(indices[:10])
+    subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
+                               drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
+
+    plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.45, anchors=anchors, thresh=0.5, device=device)
 
 
 if __name__ == "__main__":

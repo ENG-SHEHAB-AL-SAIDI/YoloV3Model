@@ -351,7 +351,6 @@ def get_evaluation_bboxes(
         true_bboxes = cells_to_bboxes(labels[2], anchor, S=S, is_preds=False)
 
         for idx in range(batch_size):
-            print(len(bboxes[idx]))
             nms_boxes = non_max_suppression(
                 bboxes[idx],
                 iou_threshold=iou_threshold,
@@ -364,8 +363,6 @@ def get_evaluation_bboxes(
             for box in true_bboxes[idx]:
                 if box[1] > threshold:
                     all_true_boxes.append([train_idx] + box)
-
-            print(train_idx)
             train_idx += 1
 
     model.train()
@@ -604,7 +601,7 @@ def plotImage(image, boxes, save=False, isPred=True):
         plt.savefig()
 
 
-def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
+def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device ):
     model.eval()
     x, y = next(iter(loader))
     x = x.to("cuda")
@@ -613,7 +610,7 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors):
         bboxes = [[] for _ in range(x.shape[0])]
         for i in range(3):
             batch_size, A, S, _, _ = out[i].shape
-            anchor = anchors[i]
+            anchor = torch.tensor([*anchors[i]]).to(device) * S
             boxes_scale_i = cells_to_bboxes(
                 out[i], anchor, S=S, is_preds=True
             )
