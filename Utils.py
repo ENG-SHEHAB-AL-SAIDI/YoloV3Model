@@ -6,6 +6,8 @@ import os
 import random
 import torch
 from collections import Counter
+
+from PIL import Image
 from tqdm import tqdm
 import xml.etree.ElementTree as eT
 
@@ -475,12 +477,11 @@ def saveModelState(model, optimizer, filePath="my_checkpoint.pth.tar", CreateLas
     if CreateLastModelState:
         lastModelStatePath = os.path.join(os.path.dirname(filePath), f"lastModelState.txt")
         with open(lastModelStatePath, 'w') as f:
-             f.write(f"{filePath}")
+            f.write(f"{filePath}")
     print("saving model state successful")
 
 
 def loadModelState(modelStateFilePath, model, optimizer, lr, device, loadLastModelState=False):
-
     if loadLastModelState and os.path.isdir(modelStateFilePath):
         if not os.path.exists(os.path.dirname(modelStateFilePath)):
             print(f"{modelStateFilePath} doesn't exist")
@@ -501,11 +502,11 @@ def loadModelState(modelStateFilePath, model, optimizer, lr, device, loadLastMod
         print("please provide Directory path with loadLastModelState and  modelState.pth.tar")
         return
 
-
     if not os.path.exists(modelStateFilePath):
         print(f"{modelStateFilePath} doesn't exist")
         return
-    elif modelStateFilePath == "": return
+    elif modelStateFilePath == "":
+        return
 
     print(f"=> Loading {modelStateFilePath}")
     state = torch.load(modelStateFilePath, map_location=device)
@@ -528,7 +529,7 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def plotImage(image, boxes, savePath="", index = 0,isPred=True):
+def plotImage(image, boxes, savePath="", index=0, isPred=True):
     """Plots predicted bounding boxes on the image"""
     cmap = plt.get_cmap("tab20b")
     class_labels = ["LP"]
@@ -597,12 +598,11 @@ def plotImage(image, boxes, savePath="", index = 0,isPred=True):
             )
 
     if savePath != "":
-        plt.savefig(os.path.join(savePath,f'figure_{index}.png'))
+        plt.savefig(os.path.join(savePath, f'figure_{index}.png'))
     plt.show()
 
 
-
-def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, savePath = "" ):
+def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, savePath=""):
     model.eval()
     x, y = next(iter(loader))
     x = x.to(device)
@@ -624,4 +624,30 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, sav
         nms_boxes = non_max_suppression(
             bboxes[i], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
         )
-        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath = savePath ,index=i)
+        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath=savePath, index=i)
+
+
+def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh, device):
+    image = np.array(Image.open(imagePath).convert('RGB'))
+    trans = transformer(image=image)
+    image = trans["image"]
+    image = np.reshape(image, (1,) + image.shape)
+    model.eval()
+    image = image.to(device)
+    output = model(image)
+    bboxes = [[] for _ in range(image.shape[0])]
+    for i in range(3):
+        batch_size, A, S, _, _ = output[i].shape
+        anchor = torch.tensor([*anchors[i]]).to(device) * S
+        boxes_scale_i = cells_to_bboxes(
+            output[i], anchor, S=S, is_preds=True
+        )
+        for idx, (box) in enumerate(boxes_scale_i):
+            bboxes[idx] += box
+
+    print(bboxes[0])
+    nms_boxes = non_max_suppression(
+        bboxes[0], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
+    )
+    plotImage(image[0].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath="./", index=20)
+    return nms_boxes

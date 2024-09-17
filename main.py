@@ -236,6 +236,10 @@ def main():
 
     plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.45, anchors=anchors, thresh=0.5, device=device)
 
+    bbox = predictImageBbox(model, "DataSet/test/0039ac4bfb8bd69d_jpg.rf.8ed0bdac228b8da2b163f8f4ec3ee12d.jpg",
+                            iou_thresh=0.45, thresh=0.5, transformer=transforms, anchors=anchors, device=device)
+    print(bbox)
+
 
 if __name__ == "__main__":
     main()
