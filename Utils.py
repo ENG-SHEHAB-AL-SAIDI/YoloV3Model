@@ -627,7 +627,7 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, sav
         plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath=savePath, index=i)
 
 
-def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh, device):
+def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh, device, index = 20):
     image = np.array(Image.open(imagePath).convert('RGB'))
     trans = transformer(image=image)
     image = trans["image"]
@@ -649,5 +649,5 @@ def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh,
     nms_boxes = non_max_suppression(
         bboxes[0], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
     )
-    plotImage(image[0].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath="./", index=20)
+    plotImage(image[0].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath="./", index=index)
     return nms_boxes

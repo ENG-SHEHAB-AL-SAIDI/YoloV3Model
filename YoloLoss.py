@@ -14,7 +14,7 @@ class YoloLoss(nn.Module):
         # Constants signifying how much to pay for each respective part of the loss
         self.lambdaClass = 1
         self.lambdaNoObj = 10
-        self.lambdaObj = 1
+        self.lambdaObj = 5
         self.lambdaBox = 10
 
     def forward(self, predictions, target, anchors):

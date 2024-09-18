@@ -9,7 +9,7 @@ import cv2
 from datetime import datetime
 from DataSet import YoloDataset
 from Utils import loadModelState, check_class_accuracy, get_evaluation_bboxes, mean_average_precision, \
-    plot_couple_examples, saveModelState
+    plot_couple_examples, saveModelState, predictImageBbox
 from YoloLoss import YoloLoss
 from YoloModel import YOLOv3
 from tqdm import tqdm
@@ -125,7 +125,7 @@ def main():
     # testLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
     #                            drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
 
-    for epoch in range(1,numEpochs+1):
+    for epoch in range(1, numEpochs + 1):
         model.train()
         loop = tqdm(trainLoader, leave=True, desc=Fore.LIGHTWHITE_EX + f'Epoch {epoch}/{numEpochs}')
         losses = []
@@ -167,11 +167,12 @@ def main():
         #                            Model Validation                             #
         ###########################################################################
         if epoch > 0 and epoch % 3 == 0:
-            saveModelState(model, optimizer, f"ModelStatus/checkpoint{datetime.now().strftime('%d-%I-%M-%S-%p')}.pth.tar")
+            saveModelState(model, optimizer,
+                           f"ModelStatus/checkpoint{datetime.now().strftime('%d-%I-%M-%S-%p')}.pth.tar")
             print("Evaluate Model")
             model.eval()
             with torch.no_grad():
-                acc = check_class_accuracy(model, validationLoader, threshold=0.05, device=device)
+                acc = check_class_accuracy(model, validationLoader, threshold=0.5, device=device)
                 print(f"Class accuracy is: {acc[0]:2f}%", end=' | ')
                 print(f"No obj accuracy is: {acc[1]:2f}%", end=' | ')
                 print(f"Obj accuracy is: {acc[2]:2f}%")
@@ -179,7 +180,7 @@ def main():
                 pred_boxes, true_boxes = get_evaluation_bboxes(
                     validationLoader,
                     model,
-                    iou_threshold=0.45,
+                    iou_threshold=0.5,
                     anchors=anchors,
                     threshold=0.5,
                     device=device
@@ -209,7 +210,7 @@ def main():
         pred_boxes, true_boxes = get_evaluation_bboxes(
             testLoader,
             model,
-            iou_threshold=0.45,
+            iou_threshold=0.5,
             anchors=anchors,
             threshold=0.5,
             device=device
@@ -234,10 +235,11 @@ def main():
     subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
                                drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
 
-    plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.45, anchors=anchors, thresh=0.5, device=device)
+    plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.5, anchors=anchors, thresh=0.5, device=device,
+                         savePath="./")
 
     bbox = predictImageBbox(model, "DataSet/test/0039ac4bfb8bd69d_jpg.rf.8ed0bdac228b8da2b163f8f4ec3ee12d.jpg",
-                            iou_thresh=0.45, thresh=0.5, transformer=transforms, anchors=anchors, device=device)
+                            iou_thresh=0.5, thresh=0.5, transformer=transforms, anchors=anchors, device=device)
     print(bbox)
 
 
