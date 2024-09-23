@@ -116,7 +116,7 @@ def main():
     ###########################################################################
     #                            Model training                               #
     ###########################################################################
-    numEpochs = 10
+    numEpochs = 9
     # indices = list(range(len(trainDataset)))
     # subData = SubsetRandomSampler(indices[:10])
     # trainLoader = DataLoader(trainDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
@@ -182,7 +182,7 @@ def main():
                     model,
                     iou_threshold=0.5,
                     anchors=anchors,
-                    threshold=0.5,
+                    threshold=0.7,
                     device=device
                 )
 
@@ -190,7 +190,7 @@ def main():
                 mapval = mean_average_precision(
                     pred_boxes,
                     true_boxes,
-                    iou_threshold=0.5,
+                    iou_threshold=0.7,
                     box_format="midpoint",
                     num_classes=1,
 
@@ -212,7 +212,7 @@ def main():
             model,
             iou_threshold=0.5,
             anchors=anchors,
-            threshold=0.5,
+            threshold=0.7,
             device=device
         )
         print("cal map")
@@ -235,11 +235,11 @@ def main():
     subTestLoader = DataLoader(testDataset, shuffle=False, num_workers=numWorkers, batch_size=batchSize,
                                drop_last=dropLast, pin_memory=pinMemory, sampler=subData)
 
-    plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.5, anchors=anchors, thresh=0.5, device=device,
+    plot_couple_examples(model=model, loader=subTestLoader, iou_thresh=0.5, anchors=anchors, thresh=0.7, device=device,
                          savePath="./")
 
     bbox = predictImageBbox(model, "DataSet/test/0039ac4bfb8bd69d_jpg.rf.8ed0bdac228b8da2b163f8f4ec3ee12d.jpg",
-                            iou_thresh=0.5, thresh=0.5, transformer=transforms, anchors=anchors, device=device)
+                            iou_thresh=0.5, thresh=0.7, transformer=transforms, anchors=anchors, device=device)
     print(bbox)
 
 

@@ -166,7 +166,7 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
     box1_area = abs((box1_x2 - box1_x1) * (box1_y2 - box1_y1))
     box2_area = abs((box2_x2 - box2_x1) * (box2_y2 - box2_y1))
 
-    return intersection / (box1_area + box2_area - intersection + 1e-6)
+    return intersection / (box1_area + box2_area - intersection + 1e-8)
 
 
 def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
@@ -529,7 +529,7 @@ def seed_everything(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def plotImage(image, boxes, savePath="", index=0, isPred=True):
+def plotImage(image, boxes, savePath="", trueBboxes=None, index=0, isPred=True):
     """Plots predicted bounding boxes on the image"""
     cmap = plt.get_cmap("tab20b")
     class_labels = ["LP"]
@@ -547,13 +547,43 @@ def plotImage(image, boxes, savePath="", index=0, isPred=True):
 
     # Create a Rectangle patch
     if isPred:
+
         for box in boxes:
             assert len(box) == 6, "box should contain class pred, confidence, x, y, width, height"
+
             class_pred = box[0]
+            obj_score = box[1]
             box = box[2:]
             upper_left_x = box[0] - box[2] / 2
             upper_left_y = box[1] - box[3] / 2
-            rect = patches.Rectangle(
+
+            upper_right_x = upper_left_x + box[2]
+            upper_right_y = upper_left_y
+
+            if trueBboxes:
+                iou = intersection_over_union(torch.tensor(box), torch.tensor(trueBboxes[0][3:]))
+                true_upper_left_x = trueBboxes[0][3] - trueBboxes[0][5] / 2
+                true_upper_left_y = trueBboxes[0][4] - trueBboxes[0][6] / 2
+
+                trueRect = patches.Rectangle(
+                    (true_upper_left_x * width, true_upper_left_y * height),
+                    trueBboxes[0][5] * width,
+                    trueBboxes[0][6] * height,
+                    linewidth=2,
+                    edgecolor='green',
+                    facecolor="none",
+                )
+                ax.add_patch(trueRect)
+                plt.text(
+                    upper_right_x * width,
+                    (upper_right_y+box[3]) * height,
+                    s=f"{iou.item():.4f}",
+                    color="white",
+                    verticalalignment="top",
+                    bbox={"color": colors[int(class_pred)], "pad": 0},
+                )
+
+            predRect = patches.Rectangle(
                 (upper_left_x * width, upper_left_y * height),
                 box[2] * width,
                 box[3] * height,
@@ -561,12 +591,22 @@ def plotImage(image, boxes, savePath="", index=0, isPred=True):
                 edgecolor=colors[int(class_pred)],
                 facecolor="none",
             )
+
             # Add the patch to the Axes
-            ax.add_patch(rect)
+            ax.add_patch(predRect)
+
             plt.text(
                 upper_left_x * width,
                 upper_left_y * height,
                 s=class_labels[int(class_pred)],
+                color="white",
+                verticalalignment="top",
+                bbox={"color": colors[int(class_pred)], "pad": 0},
+            )
+            plt.text(
+                upper_right_x * width,
+                upper_right_y * height,
+                s=f"{obj_score:.4f}",
                 color="white",
                 verticalalignment="top",
                 bbox={"color": colors[int(class_pred)], "pad": 0},
@@ -617,17 +657,22 @@ def plot_couple_examples(model, loader, thresh, iou_thresh, anchors, device, sav
             )
             for idx, (box) in enumerate(boxes_scale_i):
                 bboxes[idx] += box
-
+        temp_true_bboxes = cells_to_bboxes(y[2], anchor, S=S, is_preds=False)
         model.train()
 
     for i in range(batch_size):
         nms_boxes = non_max_suppression(
             bboxes[i], iou_threshold=iou_thresh, threshold=thresh, box_format="midpoint",
         )
-        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, savePath=savePath, index=i)
+        true_bboxes = []
+        for box in temp_true_bboxes[i]:
+            if box[1] > 0.5:
+                true_bboxes.append([0] + box)
+
+        plotImage(x[i].permute(1, 2, 0).detach().cpu(), nms_boxes, trueBboxes=true_bboxes, savePath=savePath, index=i)
 
 
-def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh, device, index = 20):
+def predictImageBbox(model, imagePath, transformer, anchors, iou_thresh, thresh, device, index=20):
     image = np.array(Image.open(imagePath).convert('RGB'))
     trans = transformer(image=image)
     image = trans["image"]
